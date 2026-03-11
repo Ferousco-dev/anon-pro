@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  VisionOS-Inspired Medium Widget
+  Layout: 4x2 — Header | Confession Card + Stat Bubbles
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- ── Header ──────────────────────────────────── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="10dp">
+
+        <!-- Avatar -->
+        <FrameLayout
+            android:id="@+id/btn_profile"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="@drawable/widget_avatar_bg">
+            <TextView
+                android:id="@+id/tv_profile_initial"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="A"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <!-- Name block -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="8dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AnonPro"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/tv_user_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@you"
+                android:textColor="#779988FF"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <!-- Last updated -->
+        <TextView
+            android:id="@+id/tv_last_updated"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Just now"
+            android:textColor="#55FFFFFF"
+            android:textSize="8sp"
+            android:layout_marginEnd="6dp" />
+
+        <!-- Reload button -->
+        <FrameLayout
+            android:id="@+id/btn_reload"
+            android:layout_width="32dp"
+            android:layout_height="28dp"
+            android:background="@drawable/widget_inner_box">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="↺"
+                android:textColor="#5599FF"
+                android:textSize="16sp" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- ── Body: Confession + Stats ──────────────── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <!-- Confession Card (left, bigger) -->
+        <LinearLayout
+            android:id="@+id/card_latest_anon"
+            android:layout_width="0dp"
+            android:layout_weight="1.3"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_inner_box"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:layout_marginEnd="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🤫 LATEST ANON"
+                android:textColor="#7766FF"
+                android:textSize="8sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/tv_latest_anon_preview"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:text="Loading latest anonymous posts..."
+                android:textColor="#EEFFFFFF"
+                android:textSize="12sp"
+                android:lineSpacingExtra="3dp"
+                android:maxLines="4"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- 3 Stat Bubbles (right column) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="0.7"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- Posts bubble -->
+            <LinearLayout
+                android:id="@+id/btn_home"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_inner_box"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:layout_marginBottom="6dp">
+                <TextView
+                    android:text="✦"
+                    android:textColor="#0099FF"
+                    android:textSize="13sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    android:id="@+id/tv_stat_posts"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textColor="#0099FF"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Posts"
+                    android:textColor="#88FFFFFF"
+                    android:textSize="8sp" />
+            </LinearLayout>
+
+            <!-- Anon bubble -->
+            <LinearLayout
+                android:id="@+id/btn_anon"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_inner_box"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:layout_marginBottom="6dp">
+                <TextView
+                    android:text="◎"
+                    android:textColor="#8844FF"
+                    android:textSize="13sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    android:id="@+id/tv_stat_anon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textColor="#8844FF"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Anon"
+                    android:textColor="#88FFFFFF"
+                    android:textSize="8sp" />
+            </LinearLayout>
+
+            <!-- Inbox bubble -->
+            <LinearLayout
+                android:id="@+id/btn_inbox"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_inner_box"
+                android:gravity="center"
+                android:orientation="vertical">
+                <TextView
+                    android:text="✉"
+                    android:textColor="#33E88A"
+                    android:textSize="13sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    android:id="@+id/tv_stat_inbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textColor="#33E88A"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Msgs"
+                    android:textColor="#88FFFFFF"
+                    android:textSize="8sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

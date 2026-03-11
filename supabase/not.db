@@ -1,0 +1,254 @@
+-- Create missing tables if they don't exist
+
+-- Add fcm_token column to users table if not exists
+ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+
+-- Create post_likes table
+CREATE TABLE IF NOT EXISTS post_likes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(post_id, user_id)
+);
+
+-- Create post_comments table
+CREATE TABLE IF NOT EXISTS post_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Assuming chats and messages tables exist as per your models
+
+-- Function to send notification via edge function
+CREATE OR REPLACE FUNCTION send_push_notification(token TEXT, title TEXT, body TEXT)
+RETURNS VOID AS $$
+BEGIN
+  -- Call the edge function
+  PERFORM net.http_post(
+    url := 'https://your-project-ref.supabase.co/functions/v1/send-notification',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer your-anon-key'
+    ),
+    body := jsonb_build_object(
+      'token', token,
+      'title', title,
+      'body', body
+    )
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for post likes
+CREATE OR REPLACE FUNCTION notify_post_like()
+RETURNS TRIGGER AS $$
+DECLARE
+  post_owner_id TEXT;
+  post_owner_token TEXT;
+  liker_name TEXT;
+  is_anonymous BOOLEAN;
+BEGIN
+  -- Get post details
+  SELECT user_id, is_anonymous INTO post_owner_id, is_anonymous 
+  FROM posts WHERE id = NEW.post_id;
+  
+  -- Don't notify if user liked their own post
+  IF post_owner_id = NEW.user_id THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Get FCM token of post owner
+  SELECT fcm_token INTO post_owner_token 
+  FROM users WHERE id = post_owner_id;
+  
+  IF post_owner_token IS NOT NULL THEN
+    -- Get liker name (anonymous posts don't expose username)
+    IF is_anonymous THEN
+      liker_name := 'Someone';
+    ELSE
+      SELECT COALESCE(display_name, alias) INTO liker_name 
+      FROM users WHERE id = NEW.user_id;
+    END IF;
+    
+    -- Send notification
+    PERFORM send_push_notification(
+      post_owner_token, 
+      'New Like', 
+      liker_name || ' liked your post'
+    );
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for post comments
+CREATE OR REPLACE FUNCTION notify_post_comment()
+RETURNS TRIGGER AS $$
+DECLARE
+  post_owner_id TEXT;
+  post_owner_token TEXT;
+  commenter_name TEXT;
+  is_anonymous BOOLEAN;
+BEGIN
+  -- Get post details
+  SELECT user_id, is_anonymous INTO post_owner_id, is_anonymous 
+  FROM posts WHERE id = NEW.post_id;
+  
+  -- Don't notify if user commented on their own post
+  IF post_owner_id = NEW.user_id THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Get FCM token of post owner
+  SELECT fcm_token INTO post_owner_token 
+  FROM users WHERE id = post_owner_id;
+  
+  IF post_owner_token IS NOT NULL THEN
+    -- Get commenter name
+    IF is_anonymous THEN
+      commenter_name := 'Someone';
+    ELSE
+      SELECT COALESCE(display_name, alias) INTO commenter_name 
+      FROM users WHERE id = NEW.user_id;
+    END IF;
+    
+    -- Send notification
+    PERFORM send_push_notification(
+      post_owner_token, 
+      'New Comment', 
+      commenter_name || ' commented on your post'
+    );
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for DMs
+CREATE OR REPLACE FUNCTION notify_dm()
+RETURNS TRIGGER AS $$
+DECLARE
+  receiver_id TEXT;
+  receiver_token TEXT;
+  sender_name TEXT;
+  chat_name TEXT;
+  is_group_chat BOOLEAN;
+BEGIN
+  -- Check if this is a DM (not group)
+  SELECT is_group INTO is_group_chat FROM chats WHERE id = NEW.conversation_id;
+  IF is_group_chat = true THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Get receiver ID (for DMs, the other participant)
+  SELECT 
+    CASE 
+      WHEN c.is_group = false AND c.other_user_id != NEW.sender_id THEN c.other_user_id
+      ELSE NULL
+    END INTO receiver_id
+  FROM chats c 
+  WHERE c.id = NEW.conversation_id;
+  
+  IF receiver_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Get FCM token of receiver
+  SELECT fcm_token INTO receiver_token 
+  FROM users WHERE id = receiver_id;
+  
+  IF receiver_token IS NOT NULL THEN
+    -- Get sender name
+    SELECT COALESCE(display_name, alias) INTO sender_name 
+    FROM users WHERE id = NEW.sender_id;
+    
+    -- Get chat name
+    SELECT name INTO chat_name FROM chats WHERE id = NEW.conversation_id;
+    
+    -- Send notification
+    PERFORM send_push_notification(
+      receiver_token, 
+      chat_name, 
+      sender_name || ': ' || LEFT(NEW.content, 100)
+    );
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for group messages
+CREATE OR REPLACE FUNCTION notify_group_message()
+RETURNS TRIGGER AS $$
+DECLARE
+  participant_ids TEXT[];
+  sender_name TEXT;
+  group_name TEXT;
+  participant_token TEXT;
+  is_group_chat BOOLEAN;
+BEGIN
+  -- Check if this is a group chat
+  SELECT is_group INTO is_group_chat FROM chats WHERE id = NEW.conversation_id;
+  IF is_group_chat = false THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Get participants for group chat
+  SELECT participant_ids INTO participant_ids 
+  FROM chats WHERE id = NEW.conversation_id AND is_group = true;
+  
+  IF participant_ids IS NULL OR array_length(participant_ids, 1) = 0 THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Get sender name
+  SELECT COALESCE(display_name, alias) INTO sender_name 
+  FROM users WHERE id = NEW.sender_id;
+  
+  -- Get group name
+  SELECT name INTO group_name FROM chats WHERE id = NEW.conversation_id;
+  
+  -- Send notification to all participants except sender
+  FOREACH participant_token IN ARRAY(
+    SELECT fcm_token FROM users 
+    WHERE id = ANY(participant_ids) 
+    AND id != NEW.sender_id 
+    AND fcm_token IS NOT NULL
+  )
+  LOOP
+    PERFORM send_push_notification(
+      participant_token, 
+      group_name, 
+      sender_name || ': ' || LEFT(NEW.content, 100)
+    );
+  END LOOP;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create triggers
+DROP TRIGGER IF EXISTS notify_post_like_trigger ON post_likes;
+CREATE TRIGGER notify_post_like_trigger
+  AFTER INSERT ON post_likes
+  FOR EACH ROW EXECUTE FUNCTION notify_post_like();
+
+DROP TRIGGER IF EXISTS notify_post_comment_trigger ON post_comments;
+CREATE TRIGGER notify_post_comment_trigger
+  AFTER INSERT ON post_comments
+  FOR EACH ROW EXECUTE FUNCTION notify_post_comment();
+
+DROP TRIGGER IF EXISTS notify_dm_trigger ON messages;
+CREATE TRIGGER notify_dm_trigger
+  AFTER INSERT ON messages
+  FOR EACH ROW EXECUTE FUNCTION notify_dm();
+
+DROP TRIGGER IF EXISTS notify_group_message_trigger ON messages;
+CREATE TRIGGER notify_group_message_trigger
+  AFTER INSERT ON messages
+  FOR EACH ROW EXECUTE FUNCTION notify_group_message();

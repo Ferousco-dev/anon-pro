@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  VisionOS-Inspired Small Widget
+  Layout: 2x2 — Compact Identity + 3 Stat Rows + Reload
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- ── App Identity Row ─────────────────────────── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="10dp">
+
+        <!-- Gradient Avatar -->
+        <FrameLayout
+            android:id="@+id/btn_profile"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:background="@drawable/widget_avatar_bg">
+            <TextView
+                android:id="@+id/tv_profile_initial"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="A"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <!-- App name -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="  ANON"
+            android:textColor="#FFFFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08" />
+
+        <!-- Reload button -->
+        <TextView
+            android:id="@+id/btn_reload"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:text="↺"
+            android:textColor="#5599FF"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:background="@drawable/widget_inner_box" />
+    </LinearLayout>
+
+    <!-- ── Stat Rows ────────────────────────────────── -->
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Posts -->
+        <LinearLayout
+            android:id="@+id/btn_home"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:background="@drawable/widget_inner_box"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:layout_marginBottom="6dp">
+            <TextView
+                android:text="✦ "
+                android:textColor="#0099FF"
+                android:textSize="11sp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Posts"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/tv_posts_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#0099FF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Anon -->
+        <LinearLayout
+            android:id="@+id/btn_anon"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:background="@drawable/widget_inner_box"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:layout_marginBottom="6dp">
+            <TextView
+                android:text="◎ "
+                android:textColor="#8844FF"
+                android:textSize="11sp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Anon"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/tv_anon_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#8844FF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Messages -->
+        <LinearLayout
+            android:id="@+id/btn_inbox"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:background="@drawable/widget_inner_box"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp">
+            <TextView
+                android:text="✉ "
+                android:textColor="#33E88A"
+                android:textSize="11sp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Msgs"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/tv_messages_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#33E88A"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>
