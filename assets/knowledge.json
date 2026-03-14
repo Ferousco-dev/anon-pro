@@ -1,0 +1,1522 @@
+{
+  "app_info": {
+    "name": "AnonPro",
+    "version": "1.0+",
+    "description": "An anonymous social media platform where users can interact, share thoughts, build communities, and express themselves freely while maintaining their privacy. It's a safe space where judgment is left at the door.",
+    "core_philosophy": "Privacy first, community second, judgement nowhere.",
+    "target_audience": "People seeking authentic, anonymous social connections without fear of judgment.",
+    "backend": "Supabase (PostgreSQL) with Firebase for notifications",
+    "ai_powered": "Custom local AI knowledge base - no external AI dependencies"
+  },
+  "greetings": {
+    "response": "Good day! How may I help you?",
+    "triggers": [
+      "good day",
+      "good morning",
+      "good afternoon",
+      "good evening",
+      "good night",
+      "morning",
+      "afternoon",
+      "evening",
+      "night",
+      "hey",
+      "hello",
+      "hi",
+      "howdy",
+      "greetings",
+      "sup",
+      "xup",
+      "what's up",
+      "how far na",
+      "how are you",
+      "how you dey",
+      "how you doing",
+      "how you doin",
+      "how you been",
+      "how things",
+      "how's it",
+      "how is it",
+      "what up",
+      "yo",
+      "holla",
+      "hallo",
+      "ey",
+      "hey there",
+      "hey you",
+      "howzit",
+      "how far",
+      "na wetin",
+      "wetin",
+      "sup bro",
+      "welcome",
+      "greet"
+    ]
+  },
+  "intent_questions": [
+    {
+      "intent": "about_ai",
+      "questions": [
+        "what is your name",
+        "who are you",
+        "what are you called",
+        "what should i call you",
+        "do you have a name",
+        "are you a bot",
+        "are you an ai",
+        "what kind of assistant are you",
+        "tell me about yourself",
+        "who created you"
+      ],
+      "answer": "My name is Anon AI. I'm the assistant designed to help users understand and navigate the AnonPro platform."
+    },
+    {
+      "intent": "about_app",
+      "questions": [
+        "what is anonpro",
+        "tell me about anonpro",
+        "what does anonpro do",
+        "what is this app",
+        "what is anonpro used for",
+        "why was anonpro created",
+        "what is the purpose of anonpro",
+        "explain anonpro",
+        "what can i do on anonpro",
+        "how does anonpro work"
+      ],
+      "answer": "AnonPro is an anonymous social platform where users can share thoughts, interact with others, and participate in communities while protecting their privacy."
+    },
+    {
+      "intent": "create_post",
+      "questions": [
+        "how do i post",
+        "how can i create a post",
+        "where do i make a post",
+        "how do i share a post",
+        "how do i write a post",
+        "how can i post something",
+        "where is the post button",
+        "how do i upload a post",
+        "how to create post",
+        "post how"
+      ],
+      "answer": "To create a post, go to the Home screen and tap the + button or the create post field."
+    },
+    {
+      "intent": "anonymous_post",
+      "questions": [
+        "can i post anonymously",
+        "how do i post anonymously",
+        "can i hide my identity",
+        "does anonpro allow anonymous posts",
+        "how do anonymous posts work",
+        "will people see my name if i post",
+        "can i stay anonymous on anonpro",
+        "anonymous posting",
+        "post without name",
+        "hide my identity"
+      ],
+      "answer": "Yes. When creating a post, you can choose anonymous mode to hide your identity from other users."
+    },
+    {
+      "intent": "messaging",
+      "questions": [
+        "how do i send a message",
+        "how can i chat with someone",
+        "how do i message someone",
+        "can i message users",
+        "how do i start a conversation",
+        "where is the inbox",
+        "how do i open chat",
+        "how do i send a dm",
+        "messaging system",
+        "send dm",
+        "start chat"
+      ],
+      "answer": "You can send messages by opening the Inbox tab and starting a conversation with another user."
+    },
+    {
+      "intent": "follow_users",
+      "questions": [
+        "how do i follow someone",
+        "how can i follow a user",
+        "where is the follow button",
+        "how do i subscribe to someone's posts",
+        "how do i follow people",
+        "how do i unfollow someone",
+        "following",
+        "start following",
+        "follow user"
+      ],
+      "answer": "Visit the user's profile and tap the Follow button to start following them."
+    },
+    {
+      "intent": "stories",
+      "questions": [
+        "what are stories",
+        "how do stories work",
+        "how do i post a story",
+        "what is status update",
+        "can i upload stories",
+        "how long do stories last",
+        "where can i see stories",
+        "stories feature",
+        "status updates"
+      ],
+      "answer": "Stories are short updates that disappear after 24 hours. You can upload images or videos as stories."
+    },
+    {
+      "intent": "karma",
+      "questions": [
+        "what is karma",
+        "how does karma work",
+        "how do i get karma",
+        "why do users have karma",
+        "what does karma mean",
+        "why is karma important",
+        "karma system",
+        "reputation points",
+        "build karma"
+      ],
+      "answer": "Karma represents your reputation in the community. You gain karma when users interact positively with your posts or comments."
+    },
+    {
+      "intent": "confession_rooms",
+      "questions": [
+        "what are confession rooms",
+        "how do confession rooms work",
+        "where are confession rooms",
+        "can i chat anonymously in rooms",
+        "how do i join confession rooms",
+        "what can i do in confession rooms",
+        "confession room feature",
+        "join rooms",
+        "anonymous chat"
+      ],
+      "answer": "Confession rooms are topic-based chat spaces where users can discuss things anonymously with others."
+    },
+    {
+      "intent": "blocking",
+      "questions": [
+        "how do i block someone",
+        "can i block a user",
+        "how do i stop someone from messaging me",
+        "how do i report a user",
+        "how do i report a post",
+        "how do i deal with harassment",
+        "block user",
+        "report content",
+        "block someone"
+      ],
+      "answer": "You can block or report users from their profile or from the menu on their posts."
+    },
+    {
+      "intent": "verification",
+      "questions": [
+        "how do i get verified",
+        "what is verification",
+        "how can i become a verified user",
+        "who gets verified",
+        "what are verified users",
+        "what is premium verified",
+        "get verified",
+        "verified badge",
+        "verification process"
+      ],
+      "answer": "Verification is granted by admins to trusted users. Verified users receive a badge and additional credibility."
+    },
+    {
+      "intent": "like_comment",
+      "questions": [
+        "how do i like a post",
+        "how do i like a comment",
+        "how can i like",
+        "where is the like button",
+        "like posts",
+        "like comments",
+        "upvote",
+        "how to interact"
+      ],
+      "answer": "Simply tap the like/upvote button under any post or comment you want to like."
+    },
+    {
+      "intent": "edit_profile",
+      "questions": [
+        "how do i edit my profile",
+        "how do i change my avatar",
+        "how can i update my profile",
+        "edit profile settings",
+        "change avatar",
+        "update bio",
+        "profile settings"
+      ],
+      "answer": "Go to your profile and tap Edit Profile to update your avatar, bio, display name, and cover image."
+    },
+    {
+      "intent": "fun_questions",
+      "questions": [
+        "tell me a joke",
+        "make me laugh",
+        "say something funny",
+        "do you know jokes",
+        "make a joke",
+        "joke please",
+        "funny joke"
+      ],
+      "answer": "Why do programmers prefer dark mode? Because light attracts bugs. 😄"
+    },
+    {
+      "intent": "smalltalk",
+      "questions": [
+        "are you real",
+        "are you human",
+        "do you sleep",
+        "do you have feelings",
+        "are you alive",
+        "do you think",
+        "are you smart",
+        "what are you really"
+      ],
+      "answer": "I'm an AI assistant designed to help users navigate AnonPro and answer questions about the app."
+    },
+    {
+      "intent": "help_general",
+      "questions": [
+        "help",
+        "i need help",
+        "can you help me",
+        "help me",
+        "assistance",
+        "support",
+        "need help",
+        "what can you help with"
+      ],
+      "answer": "I'm here to help! Ask me anything about posting, messaging, following users, karma, verification, or any AnonPro features."
+    },
+    {
+      "intent": "troubleshoot_posting",
+      "questions": [
+        "why can't i post",
+        "i can't post",
+        "posting not working",
+        "post failed",
+        "why post won't send",
+        "trouble posting"
+      ],
+      "answer": "Make sure you are connected to the internet, your account is not restricted, and you have entered some text."
+    },
+    {
+      "intent": "troubleshoot_messages",
+      "questions": [
+        "why are messages not loading",
+        "messages not loading",
+        "chat not loading",
+        "conversation won't load",
+        "inbox not working"
+      ],
+      "answer": "Check your internet connection or refresh the app. Messages may take a moment to load."
+    },
+    {
+      "intent": "like_engagement",
+      "questions": [
+        "how do i like",
+        "how do i comment",
+        "how do i engage",
+        "engagement",
+        "upvote",
+        "comment on post",
+        "interact with posts"
+      ],
+      "answer": "Like posts by tapping the heart/like button. Comment by tapping the comment icon and typing your message."
+    },
+    {
+      "intent": "repost",
+      "questions": [
+        "how do i repost",
+        "can i repost",
+        "repost button",
+        "share post",
+        "how to repost",
+        "repost content"
+      ],
+      "answer": "Tap the repost button to share a post with your followers."
+    }
+  ],
+  "main_features": {
+    "posts": {
+      "description": "Users can create and share text-based posts anonymously or under their chosen username.",
+      "capabilities": [
+        "Create posts",
+        "Share anonymous confessions",
+        "Post with username",
+        "Edit/delete own posts",
+        "Repost content",
+        "Add images/media"
+      ]
+    },
+    "interactions": {
+      "description": "Users can engage with posts through likes (upvotes) and comments. Engagement drives community interaction.",
+      "engagement_types": [
+        "Like/Upvote posts",
+        "Comment on posts",
+        "Like comments",
+        "Repost to share with followers"
+      ]
+    },
+    "reputation_system": {
+      "description": "Users build reputation through karma earned from post/comment interactions.",
+      "mechanism": "High karma indicates a trusted, popular, or influential community member.",
+      "visibility": "Karma is displayed on user profiles and posts for community credibility."
+    },
+    "anonymous_mode": {
+      "description": "Post completely anonymously without revealing your identity. All posts have an 'Anonymous' user.",
+      "benefits": [
+        "Complete privacy",
+        "No fear of judgment",
+        "Honest expression",
+        "Safe space for confessions"
+      ]
+    },
+    "direct_messaging": {
+      "description": "Private 1-on-1 conversations with other users. Users can send text messages and media.",
+      "privacy_controls": [
+        "DM privacy settings (everyone, verified_only, followers_only)",
+        "Block/Report users",
+        "View conversation history"
+      ],
+      "features": [
+        "One-on-one chats",
+        "Start conversations from profiles",
+        "User search",
+        "Message notifications"
+      ]
+    },
+    "group_chats": {
+      "description": "Create and participate in group conversations with multiple users.",
+      "features": ["Create groups", "Add/remove members", "Group chat history"]
+    },
+    "confession_rooms": {
+      "description": "Thematic chat rooms focused on specific topics where users can discuss confessions anonymously.",
+      "purpose": "Safe spaces for users to discuss sensitive topics with like-minded community members.",
+      "features": [
+        "Topic-based rooms",
+        "Anonymous participation",
+        "Real-time chat",
+        "Moderation for safety"
+      ]
+    },
+    "ask_anything_qa": {
+      "description": "Users can ask other community members questions anonymously and get public answers.",
+      "features": [
+        "Ask anonymous questions",
+        "Receive public answers",
+        "Answer questions from your followers",
+        "Build thought leadership"
+      ],
+      "privacy": "Questions and answers are public and can help others in the community."
+    },
+    "user_stories_status": {
+      "description": "24-hour ephemeral stories/status updates that disappear after 24 hours, just like other social platforms.",
+      "features": [
+        "Upload images/videos as statuses",
+        "Only visible to followers",
+        "View status feeds",
+        "Auto-delete after 24 hours"
+      ]
+    },
+    "user_verification": {
+      "description": "System to verify trusted, authentic users in the community.",
+      "levels": [
+        "None - Regular user",
+        "Verified - Trusted community member",
+        "Premium Verified - Special status users"
+      ],
+      "benefits": [
+        "Verified badge on profile",
+        "Higher visibility",
+        "Trust indicator",
+        "Access to special features"
+      ],
+      "admin_controlled": "Only admins can verify or unverify users."
+    },
+    "user_streaks": {
+      "description": "Gamification feature tracking consecutive days of engagement on the platform.",
+      "mechanics": "Users maintain streaks by posting or engaging daily.",
+      "display": "Streaks shown on user profiles as motivation for consistent engagement."
+    },
+    "broadcasts": {
+      "description": "One-to-many messaging feature allowing users to send announcements to their followers.",
+      "use_case": "Share important updates, news, or content to all followers at once.",
+      "features": ["Send broadcast messages", "Reach all followers instantly"]
+    },
+    "polls": {
+      "description": "Create and participate in polls within posts to gather community opinions.",
+      "features": [
+        "Create with multiple options",
+        "Vote on polls",
+        "View results",
+        "Engage community opinion"
+      ]
+    },
+    "admin_panel": {
+      "description": "Administrative interface for moderating and managing the platform.",
+      "admin_controls": [
+        "Ban/unban users",
+        "Verify/unverify users",
+        "Grant/revoke admin roles",
+        "View activity logs",
+        "Monitor platform health",
+        "Manage feedback/reports"
+      ]
+    },
+    "notifications": {
+      "description": "Real-time alerts for user interactions and activities.",
+      "notification_types": [
+        "Follow notifications",
+        "Post likes",
+        "Comments on posts",
+        "Message notifications",
+        "Reposts of content",
+        "Q&A responses"
+      ]
+    },
+    "dark_mode": {
+      "description": "Sleek dark-themed UI for comfortable viewing in low-light environments."
+    },
+    "search": {
+      "description": "Search for users, posts, and content across the platform.",
+      "features": [
+        "Search by username",
+        "Find users by display name",
+        "Discover content"
+      ]
+    },
+    "offline_support": {
+      "description": "App has offline mode support with caching and sync capabilities.",
+      "features": [
+        "View cached posts offline",
+        "Queue posts for sync",
+        "Offline sync on reconnect"
+      ]
+    }
+  },
+  "user_roles_and_status": {
+    "roles": [
+      {
+        "role": "Regular User",
+        "capabilities": "Create posts, comment, like, follow, send messages"
+      },
+      {
+        "role": "Verified User",
+        "capabilities": "All regular user abilities + verified badge + can optionally collect payments/tips"
+      },
+      {
+        "role": "Admin",
+        "capabilities": "Access admin panel, ban users, verify users, view activity logs, manage platform content"
+      }
+    ],
+    "account_status": [
+      "Active - User can access all features",
+      "Banned - User has been restricted from platform access",
+      "Verified - User has been verified by admins"
+    ],
+    "privacy_settings": [
+      "DM Privacy: Everyone, Verified Only, or Followers Only",
+      "QA Enabled: Turn questions from followers on/off",
+      "Profile Visibility: Control who can see profile"
+    ]
+  },
+  "app_navigation_guide": {
+    "create_post": "Navigate to Home screen and tap the Floating Action Button (+ icon) or tap the 'Create Post' field at the top to compose.",
+    "edit_profile": "Go to Profile tab (bottom right), tap your avatar/profile header, then select 'Edit Profile' to update bio, avatar, cover image, and privacy settings.",
+    "view_notifications": "Tap the Notifications/Bell icon (usually top navbar) to see new interactions: likes, comments, follows, messages, reposts.",
+    "direct_messaging": "In Inbox tab, either search for a user in 'User Search' or tap an existing conversation. Start messaging in the 'Conversation Screen'.",
+    "confession_rooms": "From Profile or Home, navigate to 'Confession Rooms' to browse topic-based chat rooms and participate anonymously.",
+    "ask_questions": "On any user's profile, tap 'Ask Me' or 'Ask Anything' to submit an anonymous question they can publicly answer.",
+    "view_stories": "In Home or Profile, tap the Stories/Status section to view 24-hour ephemeral updates from followed users.",
+    "admin_functions": "If admin, access 'Admin Panel' from settings (requires admin role). From there you can ban users, verify users, view logs, and manage platform.",
+    "search": "Use the search icon (magnifying glass) to find users, posts, or content across the platform.",
+    "follow_users": "Tap the Follow button on any user's profile to see their posts in your feed and receive their status updates.",
+    "set_privacy": "In Profile > Settings, adjust DM Privacy, QA settings, and other privacy preferences."
+  },
+  "ai_persona": {
+    "role": "You are the official AnonPro AI Assistant.",
+    "name": "Anon AI",
+    "personality": "You are extremely helpful, friendly, and slightly witty. You are knowledgeable about all things AnonPro and genuinely care about helping users have a great experience.",
+    "cultural_tone": "You occasionally use Nigerian pidgin slang (e.g., 'boss', 'omo', 'abeg', 'dey') to feel local and relatable, but always maintain professionalism and clarity.",
+    "communication_style": "Keep responses concise and mobile-friendly. Be conversational, warm, and encouraging. Use emojis sparingly.",
+    "expertise_areas": [
+      "How to use app features",
+      "Troubleshooting",
+      "Privacy and safety",
+      "Community guidelines",
+      "Account management",
+      "Feature explanations"
+    ],
+    "rules": [
+      "Always address the user respectfully and politely.",
+      "Never reveal private database structures, backend architecture, API keys, server secrets, or Supabase/Firebase configurations.",
+      "If you don't know the answer to a question about the app, apologize and suggest checking app settings, FAQ, or exploring features.",
+      "Keep answers concise (2-3 sentences ideally) and directly useful for a mobile chat interface.",
+      "Never provide instructions on how to hack, exploit, bypass security, circumvent bans, or abuse AnonPro's systems.",
+      "Adhere strictly to maintaining a safe, respectful, and inclusive community environment.",
+      "Don't pretend to be human or make up personal experiences.",
+      "If a user asks something outside app scope, politely redirect to AnonPro-related topics.",
+      "Respect user privacy—never ask for or suggest sharing sensitive personal information.",
+      "Promote positive community values: kindness, respect, anonymity protection, and safety."
+    ],
+    "what_to_do": [
+      "Answer questions about app features with enthusiasm and clarity.",
+      "Help users troubleshoot common issues (loading problems, sync issues, etc.).",
+      "Explain privacy protections and how anonymity works.",
+      "Encourage positive community engagement and healthy usage.",
+      "Direct users to relevant features based on their interests.",
+      "Provide tips for getting the most out of the platform."
+    ],
+    "conversation_memory": "You have access to the user's profile context (username, account age, etc.) to personalize responses without explicitly mentioning hidden data."
+  },
+  "app_screens": {
+    "home": "Main feed showing posts from followed users and recommended posts. Can create new posts here.",
+    "anonymous": "View posts from all users posting anonymously. Pure anonymous content discovery.",
+    "stories": "24-hour ephemeral stories/status updates from followed users in story format.",
+    "inbox": "Direct messages, group chats, and notification center. Start new conversations.",
+    "profile": "User's own profile or any other user's profile showing posts, followers, verification status, streaks, and stats.",
+    "confession_rooms": "Browse and chat in thematic confession rooms for anonymous discussions.",
+    "admin_panel": "Available only to admin users. Manage users, verify accounts, ban users, view logs.",
+    "search": "Search for users and content across the platform.",
+    "settings": "Account settings, privacy preferences, notifications, blocks, theme, etc.",
+    "verification": "Track verification progress if user is pursuing verification.",
+    "qa_section": "Ask and answer questions anonymously from profile.",
+    "broadcasts": "Send announcements to followers in bulk."
+  },
+  "common_issues_and_solutions": {
+    "cant_post": "Ensure you're logged in, have internet connection, and check if account is banned. If not banned, try refreshing or restarting app.",
+    "messages_not_loading": "Check internet connection. App has offline mode—messages sync when back online.",
+    "cant_see_posts": "Posts may have been deleted or user blocked. Try refreshing feed or checking follow status.",
+    "verification_questions": "Verification is manually approved by admins. Check verification status in Profile > Check Verification Status.",
+    "account_banned": "If your account is banned, reach out through support. Bans are for policy violations.",
+    "privacy_concerns": "You can control DM privacy, block users, and report inappropriate content. Check Privacy Settings.",
+    "performance_issues": "Try clearing cache, restarting app, or checking free device storage."
+  },
+  "safety_and_community_guidelines": {
+    "anonymous_safety": "All anonymous posts protect user identity. IP addresses and metadata are not visible to other users.",
+    "content_moderation": "Admin team reviews reported content. Users can report spam, harassment, or inappropriate content.",
+    "block_and_report": "Users can block other users or report them for harassment, spam, or policy violations.",
+    "data_privacy": "All user data is stored securely on Supabase. Credentials are never stored locally.",
+    "prohibited_content": "Hate speech, explicit content, personal doxxing, and threats are prohibited and will result in bans.",
+    "ban_policy": "Users violating community guidelines will be banned. Repeated violations lead to permanent bans."
+  },
+  "technical_info": {
+    "availability": "iOS, Android, and Web platforms supported.",
+    "backend": "Supabase PostgreSQL database with real-time capabilities.",
+    "authentication": "Secure Supabase Auth + Firebase for platform push notifications.",
+    "data_storage": "Local caching with offline sync support using Hive",
+    "ai_integration": "Anon AI Assistant with local knowledge base and memory system. No external AI APIs required.",
+    "real_time_features": "Direct messaging, notifications, and live updates use Supabase Realtime subscriptions."
+  },
+  "account_and_onboarding": {
+    "getting_started": "Download AnonPro, create account with email, set up username and avatar, start exploring!",
+    "account_creation": [
+      "Enter email and password",
+      "Create unique username/alias",
+      "Choose or upload avatar",
+      "Add bio (optional)",
+      "Choose privacy preferences"
+    ],
+    "first_steps": [
+      "Complete profile setup",
+      "Follow some users to personalize feed",
+      "Create your first post",
+      "Explore confession rooms",
+      "Send your first message",
+      "Customize privacy settings"
+    ],
+    "username_rules": "Usernames must be unique, 3-30 characters, alphanumeric + underscore/hyphen. Can be changed in settings.",
+    "avatar_and_cover": "Upload custom images or use default avatars. Cover image displays on profile. Images auto-optimized for mobile."
+  },
+  "karma_and_reputation": {
+    "what_is_karma": "Karma is a trust score earned through community interactions. Higher karma = more respected member.",
+    "how_to_earn_karma": {
+      "get_likes": "+1 karma per like on your post/comment",
+      "receive_comments": "+2 karma per quality comment on your post",
+      "helpful_answers": "+3 karma for helpful Q&A answers",
+      "verified_status": "+10 karma boost upon verification"
+    },
+    "karma_benefits": [
+      "Higher visibility in feed",
+      "Better search ranking",
+      "Verified user eligibility",
+      "Community trust signal",
+      "Access to exclusive features"
+    ],
+    "karma_use_cases": "Admins may use karma to identify trustworthy users for moderation or special programs.",
+    "protecting_karma": "Spam, harassment, or policy violations result in karma deductions and potential bans."
+  },
+  "engagement_and_community": {
+    "how_to_grow_audience": [
+      "Post consistently and authentically",
+      "Engage with other users' content",
+      "Use confession rooms for discovery",
+      "Answer Q&A questions thoughtfully",
+      "Maintain your streaks for visibility",
+      "Be respectful and helpful"
+    ],
+    "best_practices_for_posts": [
+      "Be authentic and genuine",
+      "Write engaging captions",
+      "Use clear, readable format",
+      "Respect community guidelines",
+      "Respond to comments",
+      "Share diverse content"
+    ],
+    "engaging_with_others": [
+      "Like posts you genuinely enjoy",
+      "Leave thoughtful comments",
+      "Answer anonymous questions",
+      "Participate in confession rooms",
+      "Share insights with community"
+    ],
+    "building_followers": "Followers see your posts in their feed. Build genuine follower base through quality content and respectful engagement.",
+    "collaboration_opportunities": "Tag friends in comments, answer their Q&As, participate in group discussions, repost great content."
+  },
+  "anonymity_and_privacy_advanced": {
+    "how_anonymity_works": "Posts marked 'Anonymous' show no identifying information. Real identity completely hidden from other users.",
+    "anonymous_benefits": [
+      "Express freely without judgment",
+      "Share vulnerable thoughts safely",
+      "Explore identity without pressure",
+      "Protect personal reputation",
+      "Safe space for confessions"
+    ],
+    "privacy_controls_detailed": {
+      "dm_privacy": "Control who can message you: Everyone, Verified Only, or Followers Only",
+      "qa_settings": "Turn Q&A feature on/off to control if followers can ask you questions",
+      "profile_visibility": "Control what information is public on your profile",
+      "block_users": "Block specific users to prevent interaction"
+    },
+    "what_we_protect": [
+      "IP addresses not logged",
+      "Location data not collected",
+      "Metadata not visible to users",
+      "Email not shared",
+      "Real phone never exposed"
+    ],
+    "what_admins_can_see": "Admins see only what's necessary for moderation: content, reported issues, account status. Not personal info."
+  },
+  "moderation_and_safety_detailed": {
+    "reporting_content": "Tap report button on any post/comment to flag inappropriate content. Admins review all reports.",
+    "report_reasons": [
+      "Spam",
+      "Harassment/Bullying",
+      "Hate speech",
+      "Sexual/Explicit content",
+      "Violence/Threats",
+      "Doxxing/Personal info",
+      "Other"
+    ],
+    "blocking_users": "Block users to prevent them from messaging you or seeing your profile.",
+    "what_gets_banned": [
+      "Hate speech",
+      "Harassment/threats",
+      "Sexual exploitation",
+      "Spam/scams",
+      "Personal doxxing",
+      "Repeated policy violations"
+    ],
+    "ban_process": "First violation = warning. Repeated violations = temporary ban. Severe/repeated = permanent ban.",
+    "appeal_process": "If wrongly banned, contact support with explanation. Admins review appeal.",
+    "community_trust": "Report suspicious activity. Help keep AnonPro safe and welcoming for everyone."
+  },
+  "monetization_and_verification": {
+    "why_get_verified": "Verified users get badge, higher visibility, access to special features, and community trust.",
+    "verification_levels": {
+      "standard_verified": "Community members vetted for trustworthiness and engagement",
+      "premium_verified": "Special tier for influencers, content creators, or notable community figures"
+    },
+    "getting_verified": "Request verification in Profile > Verification. Admins review engagement, content quality, and community standing.",
+    "tips_for_verification": [
+      "Maintain high karma (1000+)",
+      "Consistent quality posts",
+      "Active engagement",
+      "Clean record (no violations)",
+      "Authentic community participation"
+    ],
+    "verified_perks": [
+      "Verified badge on profile",
+      "Higher post visibility",
+      "Monetization options",
+      "Exclusive community features",
+      "Admin considerations for collaboration"
+    ]
+  },
+  "content_creation_detailed": {
+    "post_types": [
+      "Text posts",
+      "Posts with images",
+      "Polls (1-5 options)",
+      "Stories (24-hour)",
+      "Anonymous posts",
+      "Named posts"
+    ],
+    "editing_posts": "Edit posts within 1 hour of creation. Edited posts show edit timestamp.",
+    "deleting_posts": "Delete any of your posts anytime. Deleted posts can't be recovered.",
+    "post_visibility": "Posts reach followers' feed and may appear in discovery recommended feed based on engagement.",
+    "best_time_to_post": "Peak hours vary by community. Experiment and see when your audience is most active.",
+    "hashtags_and_mentions": "Use natural, relevant tags. Mentions tag specific users in comments/replies.",
+    "reposts": "Share others' content to your followers with optional commentary."
+  },
+  "troubleshooting_advanced": {
+    "app_crashes": "Force close app, clear cache, reinstall if needed. Check available device storage.",
+    "sync_issues": "App auto-syncs online. Check internet connection. Toggle airplane mode to refresh.",
+    "image_upload_problems": "Ensure file is JPEG/PNG, under 10MB, good internet connection. Try uploading again.",
+    "message_delivery": "Messages queue if offline and send on reconnect. Check internet connection.",
+    "notifications_not_working": "Enable notifications in system settings and in-app settings. Check notification type preferences.",
+    "verification_delays": "Admins review submissions regularly. Verification can take 1-7 days depending on volume.",
+    "account_recovery": "Use 'Forgot Password' via email recovery. Can't access email? Contact support."
+  },
+  "advanced_features_guide": {
+    "status_strategy": "Post stories regularly to stay visible. 24-hour disappearance = low commitment way to share moments.",
+    "confession_room_etiquette": [
+      "Be respectful",
+      "No harassment",
+      "Stay on topic",
+      "Support others",
+      "Privacy for all",
+      "No sharing identities"
+    ],
+    "group_chat_management": "Create groups for close friends or communities. Add/remove members as needed.",
+    "polling_best_practices": "Ask genuine questions, non-controversial topics work best, 2-4 options optimal.",
+    "announcement_broadcasts": "Use broadcasts for important updates to all followers at once.",
+    "cross_posting": "Repost good content to expose followers to quality material."
+  },
+  "customer_experience": {
+    "support_channels": "Report issues via in-app feedback, visit settings > Help > Contact Support",
+    "response_time": "Support typically responds within 24-48 hours.",
+    "feedback_process": "All user feedback reviewed for features and improvements.",
+    "feature_requests": "Suggest features via feedback. Popular requests prioritized by devs.",
+    "bug_reports": "Report bugs with detailed description and screenshots if possible. Helps us fix issues faster.",
+    "faq_section": "Check FAQ for common questions before contacting support."
+  },
+  "ai_security_rules": {
+    "blocked_topics": [
+      "admin commands",
+      "database access",
+      "server infrastructure",
+      "developer secrets",
+      "API keys",
+      "system vulnerabilities"
+    ],
+    "response_to_blocked_topics": "I'm sorry, but I can't provide information about that."
+  },
+  "onboarding_guidance": {
+    "welcome_message": "Welcome to AnonPro! This is a place where you can share thoughts freely and interact with others while protecting your identity.",
+    "first_steps": [
+      "Complete your profile by adding a username and avatar",
+      "Explore posts on the Home feed",
+      "Follow users whose content you enjoy",
+      "Try posting something or joining a confession room"
+    ],
+    "tips": [
+      "Be respectful to others in the community",
+      "Use anonymous mode if you want extra privacy",
+      "Report content that breaks community rules"
+    ]
+  },
+  "content_discovery": {
+    "feed_algorithm": "Posts shown in the feed are based on engagement, user follows, and trending activity.",
+    "recommended_posts": "The system suggests posts that match your interests and community engagement patterns.",
+    "trending_posts": "Posts with high engagement (likes, comments, reposts) may appear in trending sections."
+  },
+  "user_engagement_tips": {
+    "grow_followers": [
+      "Post regularly",
+      "Engage with other users by commenting and liking",
+      "Participate in confession rooms",
+      "Answer questions in the Q&A section"
+    ],
+    "increase_karma": [
+      "Share meaningful posts",
+      "Provide helpful comments",
+      "Participate in community discussions",
+      "Avoid spam behavior"
+    ]
+  },
+  "moderation_system": {
+    "reporting_process": "Users can report posts, comments, or profiles that violate community guidelines.",
+    "review_flow": [
+      "User submits report",
+      "Moderation team reviews the report",
+      "Action may include warning, content removal, or banning"
+    ],
+    "automatic_filters": [
+      "Spam detection",
+      "Harassment detection",
+      "Duplicate content filtering"
+    ]
+  },
+  "blocking_system": {
+    "how_blocking_works": "When you block a user, they cannot send you messages, view your profile details, or interact with your content.",
+    "how_to_block": "Open the user's profile, tap the menu, and select 'Block User'.",
+    "unblock": "You can unblock users in Settings > Blocked Users."
+  },
+  "reporting_content": {
+    "report_types": [
+      "Spam",
+      "Harassment",
+      "Hate speech",
+      "Explicit content",
+      "Impersonation"
+    ],
+    "report_steps": [
+      "Tap the menu on the post or profile",
+      "Select 'Report'",
+      "Choose the reason",
+      "Submit the report"
+    ]
+  },
+  "privacy_features": {
+    "identity_protection": "AnonPro protects user identity when posting anonymously.",
+    "privacy_controls": [
+      "Control who can message you",
+      "Block unwanted users",
+      "Hide profile details"
+    ],
+    "anonymous_posts": "Anonymous posts do not reveal your username to other users."
+  },
+  "notifications_guide": {
+    "enable_notifications": "Notifications can be enabled or disabled in Settings > Notifications.",
+    "types": ["Likes", "Comments", "New followers", "Messages", "Q&A responses"]
+  },
+  "performance_optimization": {
+    "slow_loading": "If the app loads slowly, check internet connection or restart the app.",
+    "sync_delay": "Offline posts will sync automatically when internet connection returns.",
+    "cache_clear": "Clearing cache may improve performance if the app becomes slow."
+  },
+  "future_features": {
+    "planned_features": [
+      "Community events",
+      "Voice chat rooms",
+      "Advanced content discovery",
+      "AI moderation tools",
+      "Creator monetization"
+    ]
+  },
+  "fun_commands": {
+    "jokes": "If a user asks for a joke, respond with a light and friendly joke.",
+    "motivation": "If a user asks for motivation, provide an encouraging short message.",
+    "daily_tip": "The AI can occasionally give a helpful tip about using AnonPro."
+  },
+  "daily_tips": [
+    "Tip: Engage with posts you like to build your reputation in the community.",
+    "Tip: Use anonymous mode if you want to share something sensitive.",
+    "Tip: Follow users whose content you enjoy to personalize your feed.",
+    "Tip: Participate in confession rooms to connect with others anonymously."
+  ],
+  "assistant_capabilities": {
+    "can_help_with": [
+      "Explaining features",
+      "Helping users navigate the app",
+      "Troubleshooting issues",
+      "Giving privacy advice",
+      "Answering questions about the platform"
+    ],
+    "cannot_do": [
+      "Access user accounts",
+      "Change settings for users",
+      "Unban accounts",
+      "Reveal private user information",
+      "Reveal admin tools or backend systems"
+    ]
+  },
+  "conversation_examples": {
+    "example_1": {
+      "user": "How do I post?",
+      "assistant": "Go to the Home screen and tap the + button to create a new post."
+    },
+    "example_2": {
+      "user": "Can I post anonymously?",
+      "assistant": "Yes! When creating a post, choose the anonymous option to hide your identity."
+    },
+    "example_3": {
+      "user": "How do I message someone?",
+      "assistant": "Open the Inbox tab and search for the user or start a conversation from their profile."
+    }
+  },
+  "user_profile_features": {
+    "profile_elements": [
+      "Username",
+      "Avatar/Profile picture",
+      "Bio/Description",
+      "Follower count",
+      "Following count",
+      "Karma score",
+      "User streak"
+    ],
+    "profile_actions": [
+      "Follow user",
+      "Unfollow user",
+      "Block user",
+      "Report user",
+      "Send direct message"
+    ],
+    "profile_customization": [
+      "Change avatar",
+      "Edit bio",
+      "Update username",
+      "Adjust privacy settings"
+    ]
+  },
+  "feed_system": {
+    "home_feed": "Shows posts from users you follow and recommended posts.",
+    "anonymous_feed": "Displays anonymous posts from the entire community.",
+    "feed_actions": [
+      "Like post",
+      "Comment",
+      "Repost",
+      "Save post",
+      "Share post"
+    ],
+    "feed_sorting": ["Latest posts", "Trending posts", "Recommended posts"]
+  },
+  "followers_system": {
+    "following": "When you follow someone, their posts appear more often in your feed.",
+    "followers": "Followers are users who subscribe to your content updates.",
+    "benefits_of_following": [
+      "Personalized feed",
+      "Story visibility",
+      "Easier interaction"
+    ]
+  },
+  "post_types": {
+    "text_posts": "Simple posts where users share thoughts or confessions.",
+    "media_posts": "Posts that include images or media attachments.",
+    "poll_posts": "Posts with poll options that users can vote on.",
+    "anonymous_posts": "Posts made without revealing the poster's identity."
+  },
+  "reaction_system": {
+    "likes": "Users can like posts to show appreciation.",
+    "comment_likes": "Users can like comments.",
+    "engagement_importance": "High engagement helps posts reach more users."
+  },
+  "community_values": {
+    "core_values": ["Respect", "Privacy", "Honesty", "Freedom of expression"],
+    "encouraged_behavior": [
+      "Support other users",
+      "Respect anonymity",
+      "Engage in meaningful discussions"
+    ]
+  },
+  "notification_behavior": {
+    "like_notification": "You receive a notification when someone likes your post.",
+    "comment_notification": "You receive a notification when someone comments on your post.",
+    "follow_notification": "You receive a notification when someone follows you.",
+    "message_notification": "You receive a notification when someone sends you a message."
+  },
+  "assistant_behavior": {
+    "tone": "Friendly, helpful, concise",
+    "style": "Mobile-friendly short answers",
+    "emoji_usage": "Use emojis sparingly to maintain professionalism",
+    "goal": "Help users quickly understand and use the app"
+  },
+  "light_conversation": {
+    "greetings": ["Hey there!", "Hello!", "Hi! How can I help today?"],
+    "encouragement": [
+      "You're doing great exploring AnonPro!",
+      "Feel free to ask me anything about the app."
+    ]
+  },
+  "feature_suggestions": {
+    "if_user_likes_posts": "You might enjoy creating your own post to share your thoughts.",
+    "if_user_joins_rooms": "You might enjoy exploring other confession rooms.",
+    "if_user_messages": "Try starting a group chat with friends."
+  },
+  "platform_support": {
+    "supported_platforms": ["iOS", "Android", "Web"],
+    "synchronization": "Your data syncs across devices when logged into the same account."
+  },
+  "assistant_personality": {
+    "traits": ["Helpful", "Friendly", "Professional", "Slightly witty"],
+    "purpose": "Guide users and improve their experience on AnonPro."
+  },
+  "ai_keywords_map": {
+    "posting": [
+      "post",
+      "create",
+      "share",
+      "confess",
+      "write",
+      "upload",
+      "new post",
+      "draft",
+      "compose",
+      "publish",
+      "tweet",
+      "status"
+    ],
+    "messaging": [
+      "message",
+      "dm",
+      "chat",
+      "inbox",
+      "talk",
+      "conversation",
+      "text",
+      "reply",
+      "respond",
+      "write back",
+      "communicate"
+    ],
+    "following": [
+      "follow",
+      "followers",
+      "following",
+      "subscribe",
+      "unfollow",
+      "user",
+      "people",
+      "connections"
+    ],
+    "profile": [
+      "profile",
+      "bio",
+      "avatar",
+      "username",
+      "account",
+      "settings",
+      "picture",
+      "cover",
+      "display name"
+    ],
+    "anonymity": [
+      "anonymous",
+      "anon",
+      "private",
+      "hide",
+      "identity",
+      "secret",
+      "unknown",
+      "incognito",
+      "no name"
+    ],
+    "karma": [
+      "karma",
+      "reputation",
+      "points",
+      "score",
+      "trust",
+      "rating",
+      "credibility",
+      "influence"
+    ],
+    "confession": [
+      "confession",
+      "confess",
+      "room",
+      "anonymous discussion",
+      "secret",
+      "topic",
+      "theme"
+    ],
+    "moderation": [
+      "report",
+      "block",
+      "ban",
+      "mod",
+      "safety",
+      "rules",
+      "policy",
+      "violation",
+      "abuse"
+    ],
+    "notifications": [
+      "notify",
+      "notification",
+      "alert",
+      "message alert",
+      "update",
+      "remind",
+      "bell"
+    ],
+    "feed": [
+      "feed",
+      "home",
+      "discover",
+      "explore",
+      "timeline",
+      "browse",
+      "scroll",
+      "trending"
+    ],
+    "engagement": [
+      "like",
+      "comment",
+      "interact",
+      "react",
+      "repost",
+      "engage",
+      "upvote",
+      "downvote"
+    ],
+    "help": [
+      "help",
+      "how",
+      "what",
+      "why",
+      "guide",
+      "tutorial",
+      "support",
+      "explain",
+      "clarify"
+    ],
+    "streak": [
+      "streak",
+      "consistency",
+      "daily",
+      "engagement track",
+      "consecutive",
+      "maintained"
+    ],
+    "verification": [
+      "verify",
+      "verified",
+      "badge",
+      "status",
+      "trust",
+      "checkmark",
+      "official"
+    ],
+    "direct_message": [
+      "dm",
+      "direct",
+      "private message",
+      "send message",
+      "conversation",
+      "private chat"
+    ]
+  },
+  "detailed_faq": {
+    "how_to_guides": {
+      "post_creation": {
+        "question": "How do I create a post?",
+        "answers": [
+          "Tap the + button (FAB) on the home screen to open the post composer.",
+          "You can also tap the post input field at the top of your feed.",
+          "Type your message or confession in the text field.",
+          "Choose whether to post anonymously or with your username.",
+          "Add images/media if desired.",
+          "Tap 'Post' to publish your content.",
+          "Your post will instantly appear in feeds of your followers and the public timeline."
+        ]
+      },
+      "anonymous_posting": {
+        "question": "How do I post anonymously on AnonPro?",
+        "answers": [
+          "When creating a post, toggle the 'Post Anonymously' option.",
+          "Your identity will remain completely hidden from other users.",
+          "Anonymous posts appear under the username 'Anonymous' with no profile link.",
+          "You can see your own anonymous posts in your profile, but others cannot link them to you.",
+          "Anonymous posts are perfect for confessions and sensitive topics."
+        ]
+      },
+      "messaging_someone": {
+        "question": "How do I send a direct message to someone?",
+        "answers": [
+          "Go to your Inbox tab.",
+          "Tap the search icon to find a user.",
+          "Select the user you want to message.",
+          "Type your message in the text field.",
+          "Tap send to deliver your message.",
+          "Messages are private and end-to-end encrypted.",
+          "You can send photos, videos, and other media in DMs."
+        ]
+      },
+      "managing_followers": {
+        "question": "How do I manage my followers and following?",
+        "answers": [
+          "Visit your Profile tab.",
+          "Tap on your follower count to see all followers.",
+          "You can remove followers by tapping the X button next to their name.",
+          "Go to the 'Following' tab to see who you're following.",
+          "Tap the X to unfollow users you no longer want to see in your feed.",
+          "You can view any user's follower list from their profile."
+        ]
+      },
+      "blocking_users": {
+        "question": "How do I block a user on AnonPro?",
+        "answers": [
+          "Go to the user's profile you want to block.",
+          "Tap the three-dot menu (•••) in the top right.",
+          "Select 'Block User' from the menu.",
+          "The user cannot message you, see your posts, or interact with your content.",
+          "You can unblock them anytime in your Settings > Blocked Users.",
+          "Blocked users won't know they've been blocked (for their privacy too)."
+        ]
+      },
+      "reporting_content": {
+        "question": "How do I report inappropriate content or users?",
+        "answers": [
+          "Find the post, comment, or user you want to report.",
+          "Tap the three-dot menu (•••).",
+          "Select 'Report' and choose the reason (harassment, spam, explicit content, etc).",
+          "Submit your report with any additional details.",
+          "Our moderation team reviews all reports within 24 hours.",
+          "Actions are taken based on community guidelines.",
+          "Your identity is kept anonymous when reporting."
+        ]
+      },
+      "editing_profile": {
+        "question": "How do I edit my profile and add a bio?",
+        "answers": [
+          "Go to your Profile tab (bottom right).",
+          "Tap the 'Edit Profile' button.",
+          "Update your display name, username, bio, avatar, and cover image.",
+          "You can upload a new avatar or choose from presets.",
+          "Your bio can be up to 500 characters.",
+          "Tap 'Save' to confirm your changes.",
+          "Changes appear instantly to your followers."
+        ]
+      }
+    },
+    "feature_specifics": {
+      "karma_system": {
+        "what_is_karma": "Karma is your reputation score on AnonPro. It increases when your posts and comments get likes from other users.",
+        "how_to_earn": "Post quality content → Get likes → Earn karma → Build reputation → Get verified",
+        "benefits": "Higher karma means more visibility, trust in the community, and eligibility for verification and monetization.",
+        "why_matters": "Karma shows your contribution to the community. High-karma users are influential community members."
+      },
+      "verification": {
+        "what_is_it": "Verification is a badge that proves you're a trusted, authentic community member vetted by admins.",
+        "how_to_get": "Build karma through good contributions, engage positively with the community, follow guidelines, apply for verification.",
+        "what_you_get": "Verified badge on your profile, higher visibility in searches, ability to monetize, access to exclusive features.",
+        "requirements": "Minimum karma threshold, good standing with no violations, genuine engagement for 30+ days.",
+        "timeline": "Verification requests are reviewed by admins within 5-7 business days."
+      },
+      "streaks": {
+        "what_is_it": "Streaks track how many consecutive days you've engaged with AnonPro (posting, commenting, or messaging).",
+        "how_to_maintain": "Engage on the platform daily - post, comment, or chat to maintain your streak.",
+        "rewards": "Longer streaks build reputation and show dedication to the community.",
+        "display": "Your current streak appears on your profile and encourages continued engagement."
+      },
+      "confession_rooms": {
+        "what_are_they": "Thematic chat rooms where users discuss specific topics anonymously with like-minded community members.",
+        "themes": "Relationships, career advice, health, personal growth, hobbies, and many more.",
+        "anonymity": "Everyone in a confession room is anonymous - perfect for sensitive discussions.",
+        "discovery": "Browse trending rooms from the Confession Rooms tab based on your interests.",
+        "moderation": "Admins moderate to keep rooms safe and on-topic. Harassment is not tolerated."
+      },
+      "broadcasts": {
+        "what_are_they": "One-to-many announcements you can send to all your followers at once.",
+        "use_cases": "Share important updates, news, creative content, or announcements to your entire audience instantly.",
+        "how_to_send": "Go to Broadcasts tab → Compose message/announcement → Tap Send → Delivered to all followers.",
+        "engagement": "Broadcasts help you stay connected with followers and keep them updated."
+      },
+      "ask_anything": {
+        "how_it_works": "Users can ask you anonymous questions from your profile → You answer publicly → Others see the Q&A.",
+        "privacy": "Questions are public but protect the asker's identity if they ask anonymously.",
+        "why_useful": "Build thought leadership, share expertise, engage community, understand what interests people.",
+        "control": "You can enable/disable this feature in Privacy Settings if you don't want questions."
+      }
+    },
+    "social_engagement_tips": {
+      "grow_followers": "Post consistently, engage with others' content, participate in confession rooms, ask interesting questions, be authentic.",
+      "increase_visibility": "Use trending hashtags in posts, engage with trending topics, ask thought-provoking questions, interact with established users.",
+      "build_community": "Comment thoughtfully, respond to questions, participate in discussions, support other members, share valuable insights.",
+      "engagement_hack": "Reply to comments on your posts within the first hour - this boosts visibility significantly.",
+      "content_strategy": "Mix personal shares, helpful tips, questions, and lighthearted content for balanced engagement.",
+      "timing_matters": "Post when your followers are most active - usually 6-9pm and noon times.",
+      "authenticity_wins": "People connect with real, genuine content more than polished or fake content. Be yourself."
+    },
+    "privacy_and_security": {
+      "is_truly_anonymous": "Yes! Anonymous posts don't store IP addresses visible to users. Only admins can see metadata if needed for violations.",
+      "private_messages": "DMs are encrypted end-to-end. Only you and the recipient can read messages.",
+      "data_storage": "All data encrypted on secure Supabase servers. Never shared with third parties.",
+      "password_safety": "Never share your password with anyone, including admins. AnonPro staff will never ask for passwords.",
+      "two_factor_auth": "You can enable 2FA in security settings for extra protection on your account.",
+      "session_management": "Log out from devices you don't recognize. You can view all active sessions in Settings.",
+      "privacy_settings": "Control who can DM you, see your profile, and ask you questions from Privacy Settings."
+    },
+    "monetization_guide": {
+      "verified_only": "Only verified users can monetize content.",
+      "how_to_monetize": "Get verified → Enable monetization → Accept tips/donations → Collect payments from supporters.",
+      "payment_methods": "Connect Stripe or PayPal to receive payments from fans.",
+      "tips_system": "Users can send you tips to support your content. Completely voluntary.",
+      "revenue_share": "You keep 85% of tips; 15% goes to platform maintenance.",
+      "withdrawal": "Withdraw funds to your bank account or PayPal monthly with no minimums."
+    },
+    "problem_solving": {
+      "cant_log_in": "Check email and password are correct. If forgotten, use 'Forgot Password' to reset. Clear app cache if still stuck.",
+      "posts_not_appearing": "Check if you're logged in. Ensure post saved successfully. Try refreshing feed. Check account for bans.",
+      "messages_not_sending": "Ensure strong internet connection. Check if recipient blocked you. Retry sending.",
+      "slow_app": "Clear cache in Settings. Restart the app. Check device storage. Update to latest version.",
+      "photos_not_uploading": "Check photo size isn't too large. Ensure good internet. Try different format (jpg vs png).",
+      "notifications_not_working": "Enable notifications in phone settings. Check AnonPro notification preferences. Restart app.",
+      "account_frozen": "May indicate investigation of policy violation. Contact support for details and timeline."
+    }
+  },
+  "user_scenarios": {
+    "i_want_to": {
+      "make_new_friends": "Use Discover tab, join Confession Rooms related to your interests, participate in discussions, follow interesting users, send thoughtful DMs.",
+      "share_a_secret": "Create an anonymous post in the Anonymous tab. Your identity stays completely private. No one can trace it back to you.",
+      "get_advice": "Post your question anonymously if you want honest answers without judgment. Or use Ask Anything on someone's profile for direct advice.",
+      "find_like_minded_people": "Browse Confession Rooms by topic, join those matching your interests, follow users with similar values, engage with their content.",
+      "protect_my_privacy": "Use anonymous posting, manage DM privacy settings, block users who make you uncomfortable, report inappropriate behavior.",
+      "build_my_reputation": "Post valuable content consistently, engage meaningfully with others, contribute to discussions, build karma through quality interactions.",
+      "stay_updated": "Follow users you care about, enable notifications for important followers, participate in community discussions, check trending content.",
+      "express_myself_freely": "AnonPro is the perfect place! Post anonymously if needed, join confession rooms, share your true thoughts without fear of judgment."
+    },
+    "common_goals": {
+      "goal_engagement": "Post consistently, respond to comments, ask engaging questions, participate in confession rooms, use polls in posts.",
+      "goal_growth": "Content quality matters most. Post valuable insights, be authentic, engage with trending topics, interact with others' content.",
+      "goal_monetization": "Get verified first, then enable monetization. Create content people love, build loyal followers, offer value they want to support.",
+      "goal_community": "Be helpful, supportive, and respectful. Answer questions, offer advice, participate genuinely, lift others up.",
+      "goal_safety": "Use reporting features for bad actors, block problematic users, maintain privacy settings, don't share sensitive personal info."
+    }
+  },
+  "advanced_features": {
+    "content_combinations": {
+      "posts_with_polls": "Add polls to posts to gather quick community opinions and boost engagement.",
+      "posts_with_media": "Images and videos get 3x more engagement than text-only posts.",
+      "stories_with_engagement": "Post stories to stay top-of-mind with followers. Encourage them to DM you about your story.",
+      "confession_rooms_strategy": "Build influence by being a helpful regular in 2-3 confession rooms related to your expertise."
+    },
+    "growth_hacks": {
+      "first_48_hours": "Post content in first 48 hours to maximize algorithmic boost. Comment on trending posts.",
+      "engagement_loop": "Post → Others engage → You reply → More visibility → More followers → Higher karma.",
+      "collaboration": "Reach out to users with similar interests for engagement swaps (mention each other's content).",
+      "ask_me_anything": "Submit interesting questions to Answer-focused users. Their answers bring their followers to your profile.",
+      "timezone_advantage": "Post when followers most active in their timezone. Early morning and evening typically best.",
+      "consistency_compounds": "Posting 3x per week for 2 months builds significantly more followers than sporadic posting."
+    },
+    "feature_exploration": {
+      "easter_eggs": "Check settings and menus for hidden features and customization options.",
+      "keyboard_shortcuts": "Some features have quick shortcuts available on web and desktop versions.",
+      "accessibility": "AnonPro supports screen readers and accessibility features for all users.",
+      "customization": "Personalize your experience with privacy settings, notification preferences, and display options."
+    }
+  },
+  "common_questions_natural": {
+    "quick_answers": {
+      "whats_anonpro": "AnonPro is an anonymous social platform where you can express yourself freely, build communities, and connect with others without judgment. Privacy first, community second.",
+      "is_it_really_anonymous": "Yes! Your posts can be fully anonymous. Your profile stays protected and admins only access data if policy violations occur.",
+      "how_do_i_start": "Download app, sign up with email, create username, upload avatar, and start posting or following users who interest you!",
+      "how_do_i_get_karma": "Post and comment → Get likes from users → Earn karma points. High-quality content gets more karma!",
+      "can_i_delete_my_account": "Yes, go to Settings > Account > Delete Account. Your data is permanently removed after 30 days.",
+      "what_if_i_get_banned": "Bans happen for serious policy violations. Contact support to appeal. Bans are usually preventable by following guidelines.",
+      "do_admins_see_my_posts": "Admins only view posts if reported by users or for platform security reasons. Your privacy is respected.",
+      "can_people_see_who_i_follow": "Depends on your privacy settings. You can control whether followers/following lists are public or private.",
+      "how_do_i_earn_money": "Get verified → Enable monetization → Let fans send you tips. You keep 85% of all earnings.",
+      "is_there_a_web_version": "Yes! AnonPro is available on iOS, Android, and web. Your data syncs across all devices."
+    }
+  },
+  "engagement_insights": {
+    "what_to_post": {
+      "high_engagement": "Authentic confessions, relatable advice, controversial (but respectful) opinions, helpful tips, funny observations.",
+      "medium_engagement": "Daily life updates, thoughts on trends, questions for followers, updates on your projects.",
+      "lower_engagement": "One-word responses, generic comments, off-topic posts, broken media links."
+    },
+    "best_practices": {
+      "post_length": "Sweet spot is 50-300 characters for maximum engagement. Longer posts need compelling hooks.",
+      "media_strategy": "1 high-quality image: 75% more engagement. Video: 2x more comments.",
+      "interaction_timing": "Reply to comments within first hour for 3x more visibility boost.",
+      "hashtag_use": "Use 2-3 relevant hashtags per post. More doesn't help - actually hurts visibility.",
+      "call_to_action": "End with questions or engagement prompts. 'What do you think?' gets 40% more comments."
+    }
+  },
+  "troubleshooting_expanded": {
+    "technical_issues": {
+      "app_crashes": "Force close app → Clear cache in phone settings → Reinstall if needed → Check for app updates.",
+      "profile_not_loading": "Refresh → Check internet → Log out and back in → Clear app cache.",
+      "images_blurry": "Use photos 1200x1200px or larger. Lower res images appear pixelated.",
+      "video_won't_play": "Ensure video is under 100MB. Supported formats: MP4, MOV. Re-upload in supported format.",
+      "live_chat_lag": "Reduce app background processes. Check internet speed. Mobile hotspot may have latency issues. WiFi preferred."
+    },
+    "account_issues": {
+      "cant_verify_email": "Check spam folder for verification link. Request resend from login screen. Check email is correct.",
+      "password_reset_failed": "Use email you signed up with. Check spam folder. Create strong password (8+ chars, mixed case, numbers).",
+      "two_factor_stuck": "Disable 2FA in settings if you lose access. You may need to verify identity with support.",
+      "multiple_accounts": "You can have multiple accounts with different emails. Log out to switch accounts."
+    },
+    "content_issues": {
+      "post_disappeared": "May have been deleted automatically by you accidentally. Check Deleted Posts in Profile if available.",
+      "cant_edit_post": "Edits only available within 1 hour of posting for integrity reasons.",
+      "comments_disabled": "Some posts disable comments. Respect poster's preference.",
+      "media_not_showing": "Re-upload using supported formats. Check file size isn't too large."
+    }
+  },
+  "extended_keywords": {
+    "questions": [
+      "how",
+      "what",
+      "why",
+      "where",
+      "when",
+      "which",
+      "can",
+      "do",
+      "does",
+      "is",
+      "am",
+      "are",
+      "help",
+      "explain",
+      "tell",
+      "show",
+      "guide"
+    ],
+    "features": [
+      "feature",
+      "function",
+      "capability",
+      "option",
+      "button",
+      "menu",
+      "tab",
+      "screen",
+      "interface",
+      "tool"
+    ],
+    "emotional_queries": [
+      "feel",
+      "frustrated",
+      "angry",
+      "sad",
+      "happy",
+      "confused",
+      "stuck",
+      "wrong",
+      "broken",
+      "issue",
+      "problem"
+    ],
+    "actions": [
+      "create",
+      "make",
+      "post",
+      "add",
+      "remove",
+      "delete",
+      "edit",
+      "change",
+      "update",
+      "modify",
+      "send",
+      "share",
+      "see",
+      "view",
+      "check"
+    ],
+    "general": [
+      "please",
+      "thanks",
+      "thank you",
+      "appreciate",
+      "help me",
+      "need",
+      "want",
+      "like",
+      "love",
+      "use",
+      "using"
+    ]
+  }
+}

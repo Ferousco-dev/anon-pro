@@ -487,6 +487,20 @@ Posted on ANONPRO
                       text: widget.post.originalContent ?? widget.post.content,
                       aliasToUserId: widget.post.taggedUsers,
                     ),
+                    if ((widget.post.postCategory ?? '').isNotEmpty ||
+                        widget.post.customTags.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          if ((widget.post.postCategory ?? '').isNotEmpty)
+                            _buildMetaChip(widget.post.postCategory!),
+                          for (final tag in widget.post.customTags)
+                            _buildMetaChip('#$tag'),
+                        ],
+                      ),
+                    ],
 
                     // Post Image
                     if (widget.post.hasImage) ...[
@@ -723,6 +737,27 @@ Posted on ANONPRO
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetaChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppConstants.darkGray,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppConstants.primaryBlue.withOpacity(0.2),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppConstants.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

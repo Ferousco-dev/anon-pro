@@ -88,6 +88,7 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
 
   Future<void> _loadPosts({bool showLoading = true}) async {
     try {
+      final nowIso = DateTime.now().toIso8601String();
       if (showLoading) {
         if (mounted) setState(() => _isLoading = true);
       }
@@ -105,6 +106,8 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
               )
             ''')
             .eq('is_anonymous', true)
+            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+            .or('expires_at.is.null,expires_at.gt.$nowIso')
             .order('created_at', ascending: false)
             .limit(AppConstants.postsPerPage);
       } catch (e) {
@@ -113,6 +116,8 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
             .from('posts')
             .select('*')
             .eq('is_anonymous', true)
+            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+            .or('expires_at.is.null,expires_at.gt.$nowIso')
             .order('created_at', ascending: false)
             .limit(AppConstants.postsPerPage);
       }

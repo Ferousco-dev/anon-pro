@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:ui';
 import '../main.dart';
@@ -10,6 +11,8 @@ import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../utils/constants.dart';
 import '../services/image_upload_service.dart';
+import '../services/streak_service.dart';
+import '../services/notification_service.dart';
 
 class CreatePostSheet extends StatefulWidget {
   final UserModel? currentUser;
@@ -37,6 +40,7 @@ class _CreatePostSheetState extends State<CreatePostSheet>
     with SingleTickerProviderStateMixin {
   final TextEditingController _contentController = TextEditingController();
   final TextEditingController _imageNameController = TextEditingController();
+  final TextEditingController _tagsController = TextEditingController();
   File? _selectedImage;
   bool _isCompressing = false;
   bool _isUploading = false;
@@ -44,6 +48,11 @@ class _CreatePostSheetState extends State<CreatePostSheet>
   // Identity mode
   // 'anonymous' | 'verified_anonymous' | 'public'
   late String _identityMode;
+  String _selectedCategory = 'General';
+  bool _isTemporary = false;
+  bool _isScheduled = false;
+  int _scheduleDelayMinutes = 0;
+  bool _scheduleReminder = true;
 
   // Poll fields
   bool _isPoll = false;
@@ -84,6 +93,7 @@ class _CreatePostSheetState extends State<CreatePostSheet>
   void dispose() {
     _contentController.dispose();
     _imageNameController.dispose();
+    _tagsController.dispose();
     _pollQuestionController.dispose();
     _animController.dispose();
     for (final controller in _optionControllers) {
@@ -169,43 +179,81 @@ class _CreatePostSheetState extends State<CreatePostSheet>
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final lastPostMs = prefs.getInt('last_post_at_ms') ?? 0;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (nowMs - lastPostMs < 30000) {
+      _showError('Please wait a bit before posting again.');
+      return;
+    }
+
     final content = _contentController.text.trim();
     final now = DateTime.now();
     final isAnonymous =
         _identityMode == 'anonymous' || _identityMode == 'verified_anonymous';
+    final scheduledAt = _isScheduled && _scheduleDelayMinutes > 0
+        ? now.add(Duration(minutes: _scheduleDelayMinutes))
+        : null;
+    final expiresAt = _isTemporary
+        ? (scheduledAt ?? now).add(const Duration(hours: 24))
+        : null;
 
     // ── GATHER DATA BEFORE DISPOSE ──
     final customImageName = _imageNameController.text.trim();
 
     // ── OPTIMISTIC POST ──
-    final optimisticPost = PostModel(
-      id: 'optimistic_${now.millisecondsSinceEpoch}',
-      userId: userId,
-      content: content,
-      imageUrl: _selectedImage != null ? _selectedImage!.path : null,
-      isAnonymous: isAnonymous,
-      postIdentityMode: _identityMode,
-      likesCount: 0,
-      commentsCount: 0,
-      sharesCount: 0,
-      viewsCount: 0,
-      createdAt: now,
-      updatedAt: now,
-      originalPostId: null,
-      repostsCount: 0,
-      originalContent: null,
-      user: widget.currentUser,
-      isLikedByCurrentUser: false,
-      isRepostedByCurrentUser: false,
-      taggedUsers: const {},
-      postType: 'regular',
-      relatedConfessionRoomId: null,
-    );
+    if (scheduledAt == null) {
+      final optimisticPost = PostModel(
+        id: 'optimistic_${now.millisecondsSinceEpoch}',
+        userId: userId,
+        content: content,
+        imageUrl: _selectedImage != null ? _selectedImage!.path : null,
+        isAnonymous: isAnonymous,
+        postIdentityMode: _identityMode,
+        likesCount: 0,
+        commentsCount: 0,
+        sharesCount: 0,
+        viewsCount: 0,
+        createdAt: now,
+        updatedAt: now,
+        originalPostId: null,
+        repostsCount: 0,
+        originalContent: null,
+        user: widget.currentUser,
+        isLikedByCurrentUser: false,
+        isRepostedByCurrentUser: false,
+        taggedUsers: const {},
+        postType: 'regular',
+        relatedConfessionRoomId: null,
+        postCategory: _isVerifiedUser ? _selectedCategory : null,
+        customTags: _isVerifiedUser
+            ? _tagsController.text
+                .split(',')
+                .map((t) => t.trim())
+                .where((t) => t.isNotEmpty)
+                .toList()
+            : const [],
+        scheduledAt: scheduledAt,
+        expiresAt: expiresAt,
+        isTemporary: _isTemporary,
+      );
 
-    // Close sheet and show optimistic post
-    if (mounted) {
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onOptimisticPost?.call(optimisticPost);
+      }
+    } else if (mounted) {
       Navigator.pop(context);
-      widget.onOptimisticPost?.call(optimisticPost);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _scheduleDelayMinutes == 0
+                ? 'Post created'
+                : 'Post scheduled in $_scheduleDelayMinutes min',
+          ),
+          backgroundColor: AppConstants.primaryBlue,
+        ),
+      );
     }
 
     // ── BACKGROUND NETWORK WORK ──
@@ -218,11 +266,38 @@ class _CreatePostSheetState extends State<CreatePostSheet>
             'image_url': null,
             'is_anonymous': isAnonymous,
             'post_identity_mode': _identityMode,
+            if (_isVerifiedUser) 'post_category': _selectedCategory,
+            if (_isVerifiedUser)
+              'post_custom_tags': _tagsController.text.trim(),
+            if (scheduledAt != null)
+              'scheduled_at': scheduledAt.toIso8601String(),
+            if (expiresAt != null) 'expires_at': expiresAt.toIso8601String(),
+            if (_isTemporary) 'is_temporary': true,
           })
           .select()
           .single();
 
       final postId = postResponse['id'] as String;
+
+      await prefs.setInt('last_post_at_ms', nowMs);
+
+      if (scheduledAt != null && _scheduleReminder) {
+        await NotificationService().schedulePostReminder(
+          when: scheduledAt,
+          body: 'Your scheduled post is now live.',
+        );
+      }
+
+      if (scheduledAt == null) {
+        try {
+          await StreakService().recordPost(
+            userId: userId,
+            hasEngagement: false,
+          );
+        } catch (e) {
+          debugPrint('Failed to update streak: $e');
+        }
+      }
 
       // Upload image if selected
       String? imageUrl;
@@ -353,6 +428,11 @@ class _CreatePostSheetState extends State<CreatePostSheet>
                         // Text Input
                         _buildTextInput(),
 
+                        if (_isVerifiedUser) ...[
+                          _buildVerifiedPostMeta(),
+                          const SizedBox(height: 10),
+                        ],
+
                         // Character counter
                         Padding(
                           padding: const EdgeInsets.only(top: 4, bottom: 8),
@@ -373,6 +453,8 @@ class _CreatePostSheetState extends State<CreatePostSheet>
 
                         // Poll Section
                         if (_isPoll) _buildPollSection(),
+
+                        _buildPostTimingSection(),
 
                         // ── Bottom Toolbar ──
                         _buildBottomToolbar(),
@@ -600,6 +682,246 @@ class _CreatePostSheetState extends State<CreatePostSheet>
         onChanged: (value) => setState(() {}),
       ),
     );
+  }
+
+  Widget _buildVerifiedPostMeta() {
+    final categories = [
+      'General',
+      'Confession',
+      'Advice',
+      'Story',
+      'Question',
+      'Announcement',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _kGlass.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _kGlassBorder.withOpacity(0.3),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Verified Post Options',
+            style: TextStyle(
+              color: _kSubtleWhite,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _selectedCategory,
+            items: categories
+                .map(
+                  (c) => DropdownMenuItem(
+                    value: c,
+                    child: Text(
+                      c,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedCategory = value);
+            },
+            dropdownColor: AppConstants.darkGray,
+            decoration: InputDecoration(
+              labelText: 'Category',
+              labelStyle: const TextStyle(color: _kDimText),
+              filled: true,
+              fillColor: _kGlass.withOpacity(0.4),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: _kGlassBorder.withOpacity(0.4)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: _kGlassBorder.withOpacity(0.4)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide:
+                    BorderSide(color: AppConstants.primaryBlue.withOpacity(0.7)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _tagsController,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              labelText: 'Tags (comma separated)',
+              labelStyle: const TextStyle(color: _kDimText),
+              filled: true,
+              fillColor: _kGlass.withOpacity(0.4),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: _kGlassBorder.withOpacity(0.4)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: _kGlassBorder.withOpacity(0.4)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide:
+                    BorderSide(color: AppConstants.primaryBlue.withOpacity(0.7)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostTimingSection() {
+    final bestTimeText = _getBestTimeHint();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _kGlass.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _kGlassBorder.withOpacity(0.3),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Post Timing',
+            style: TextStyle(
+              color: _kSubtleWhite,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (bestTimeText.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              bestTimeText,
+              style: TextStyle(
+                color: _kDimText.withOpacity(0.8),
+                fontSize: 12,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _isTemporary,
+            onChanged: (value) {
+              setState(() => _isTemporary = value);
+            },
+            title: const Text(
+              'Temporary post (24h)',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+            activeColor: AppConstants.primaryBlue,
+          ),
+          const SizedBox(height: 6),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _isScheduled,
+            onChanged: (value) {
+              setState(() {
+                _isScheduled = value;
+                if (!_isScheduled) {
+                  _scheduleDelayMinutes = 0;
+                }
+              });
+            },
+            title: const Text(
+              'Schedule post',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+            activeColor: AppConstants.primaryBlue,
+          ),
+          if (_isScheduled) ...[
+            const SizedBox(height: 6),
+            DropdownButtonFormField<int>(
+              value: _scheduleDelayMinutes,
+              items: [0, 15, 30, 60, 120]
+                  .map(
+                    (m) => DropdownMenuItem(
+                      value: m,
+                      child: Text(
+                        m == 0 ? 'Post now' : 'In $m minutes',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _scheduleDelayMinutes = value);
+              },
+              dropdownColor: AppConstants.darkGray,
+              decoration: InputDecoration(
+                labelText: 'Schedule time',
+                labelStyle: const TextStyle(color: _kDimText),
+                filled: true,
+                fillColor: _kGlass.withOpacity(0.4),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: _kGlassBorder.withOpacity(0.4)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: _kGlassBorder.withOpacity(0.4)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                      color: AppConstants.primaryBlue.withOpacity(0.7)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _scheduleReminder,
+              onChanged: (value) {
+                setState(() => _scheduleReminder = value);
+              },
+              title: const Text(
+                'Remind me when it goes live',
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
+              activeColor: AppConstants.primaryBlue,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _getBestTimeHint() {
+    final now = DateTime.now();
+    final bestHours = [9, 12, 19, 21];
+    int? nextHour;
+    for (final h in bestHours) {
+      if (now.hour < h) {
+        nextHour = h;
+        break;
+      }
+    }
+    nextHour ??= bestHours.first;
+    final isTomorrow = now.hour >= bestHours.last;
+    final label = isTomorrow ? 'tomorrow' : 'today';
+    final hourLabel = nextHour <= 12 ? '$nextHour AM' : '${nextHour - 12} PM';
+    return 'Best time: $label at $hourLabel';
   }
 
   // ═══════════════════ IMAGE PREVIEW ═══════════════════

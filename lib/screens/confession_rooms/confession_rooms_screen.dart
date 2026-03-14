@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/confession_room_model.dart';
 import '../../services/confession_rooms_service.dart';
 import '../../utils/constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/services.dart';
 
 class ConfessionRoomsScreen extends StatefulWidget {
   final String userId;
@@ -21,11 +23,13 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
   final ConfessionRoomsService _roomsService = ConfessionRoomsService();
   List<ConfessionRoomModel> _rooms = [];
   bool _isLoading = false;
+  bool _canCreateRoom = false;
 
   @override
   void initState() {
     super.initState();
     _loadRooms();
+    _loadCreatePermission();
 
     // If initialRoomId is provided, navigate to that room after loading
     if (widget.initialRoomId != null) {
@@ -33,6 +37,46 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
         _navigateToInitialRoom();
       });
     }
+  }
+
+  Future<void> _loadCreatePermission() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('users')
+          .select('is_verified, role')
+          .eq('id', widget.userId)
+          .maybeSingle();
+      final isVerified = res?['is_verified'] == true;
+      final isAdmin = res?['role'] == 'admin';
+      if (mounted) {
+        setState(() => _canCreateRoom = isVerified || isAdmin);
+      }
+      await _loadRooms();
+    } catch (e) {
+      debugPrint('Error checking verification: $e');
+    }
+  }
+
+  void _showNotVerifiedMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Wait sorry not yet, focus on your streak 😎',
+        ),
+        backgroundColor: AppConstants.primaryBlue,
+      ),
+    );
+  }
+
+  void _copyJoinCode(String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Join code copied'),
+        backgroundColor: AppConstants.primaryBlue,
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _navigateToInitialRoom() async {
@@ -59,7 +103,9 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
   Future<void> _loadRooms() async {
     setState(() => _isLoading = true);
     try {
-      final rooms = await _roomsService.getUserRooms(widget.userId);
+      final rooms = _canCreateRoom
+          ? await _roomsService.getUserRooms(widget.userId)
+          : await _roomsService.getActiveRooms();
       if (mounted) {
         setState(() {
           _rooms = rooms;
@@ -77,8 +123,16 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
   }
 
   void _showCreateRoomDialog() {
+    if (!_canCreateRoom) {
+      _showNotVerifiedMessage();
+      return;
+    }
+
     final nameController = TextEditingController();
+    final rulesController = TextEditingController();
+    final pinnedController = TextEditingController();
     int durationMinutes = 60;
+    int startDelayMinutes = 0;
 
     showDialog(
       context: context,
@@ -99,6 +153,50 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     hintText: 'Room name...',
+                    hintStyle:
+                        const TextStyle(color: AppConstants.textSecondary),
+                    border: OutlineInputBorder(
+                      borderSide:
+                          const BorderSide(color: AppConstants.darkGray),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Room rules (optional):',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: rulesController,
+                  maxLines: 3,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Add rules for this room...',
+                    hintStyle:
+                        const TextStyle(color: AppConstants.textSecondary),
+                    border: OutlineInputBorder(
+                      borderSide:
+                          const BorderSide(color: AppConstants.darkGray),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Pinned message (optional):',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: pinnedController,
+                  maxLines: 2,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Message to pin at the top...',
                     hintStyle:
                         const TextStyle(color: AppConstants.textSecondary),
                     border: OutlineInputBorder(
@@ -134,6 +232,32 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
                       )
                       .toList(),
                 ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Start time:',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                DropdownButton<int>(
+                  value: startDelayMinutes,
+                  onChanged: (v) {
+                    setState(() => startDelayMinutes = v ?? 0);
+                  },
+                  isExpanded: true,
+                  dropdownColor: AppConstants.darkGray,
+                  items: [0, 15, 30, 60]
+                      .map(
+                        (d) => DropdownMenuItem(
+                          value: d,
+                          child: Text(
+                            d == 0 ? 'Start now' : 'Start in $d minutes',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
               ],
             ),
           ),
@@ -153,6 +277,16 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
                       creatorId: widget.userId,
                       roomName: nameController.text,
                       durationMinutes: durationMinutes,
+                      rules: rulesController.text.trim().isEmpty
+                          ? null
+                          : rulesController.text.trim(),
+                      pinnedMessage: pinnedController.text.trim().isEmpty
+                          ? null
+                          : pinnedController.text.trim(),
+                      scheduledStartAt: startDelayMinutes == 0
+                          ? null
+                          : DateTime.now()
+                              .add(Duration(minutes: startDelayMinutes)),
                     );
                     if (mounted) {
                       Navigator.pop(ctx);
@@ -236,15 +370,15 @@ class _ConfessionRoomsScreenState extends State<ConfessionRoomsScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-ElevatedButton.icon(
-  onPressed: _showCreateRoomDialog,
-  icon: const Icon(Icons.add),
-  label: const Text('Create Room'),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: AppConstants.primaryBlue,
-    foregroundColor: Colors.white, // fixes invisible text
-  ),
-),
+                      ElevatedButton.icon(
+                        onPressed: _showCreateRoomDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Room'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppConstants.primaryBlue,
+                          foregroundColor: Colors.white, // fixes invisible text
+                        ),
+                      ),
                     ],
                   ),
                 )
@@ -256,6 +390,13 @@ ElevatedButton.icon(
                     final timeRemaining = room.timeRemaining;
                     final hours = timeRemaining.inHours;
                     final minutes = timeRemaining.inMinutes % 60;
+                    final startsAt = room.scheduledStartAt;
+                    final startsIn = startsAt != null
+                        ? startsAt.difference(DateTime.now())
+                        : Duration.zero;
+                    final startsInMinutes = startsIn.inMinutes;
+                    final hasStarted =
+                        startsAt == null || startsAt.isBefore(DateTime.now());
 
                     return Card(
                       color: AppConstants.darkGray,
@@ -293,7 +434,9 @@ ElevatedButton.icon(
                                     child: Text(
                                       room.isExpired
                                           ? 'Expired'
-                                          : '${hours}h ${minutes}m left',
+                                          : !hasStarted
+                                              ? 'Starts in ${startsInMinutes}m'
+                                              : '${hours}h ${minutes}m left',
                                       style: const TextStyle(
                                         color: AppConstants.primaryBlue,
                                         fontSize: 12,
@@ -311,30 +454,71 @@ ElevatedButton.icon(
                                 fontSize: 12,
                               ),
                             ),
+                            if ((room.joinCode ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Join code: ',
+                                    style: TextStyle(
+                                      color: AppConstants.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    room.joinCode!,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.copy_rounded,
+                                      size: 16,
+                                      color: AppConstants.primaryBlue,
+                                    ),
+                                    onPressed: () =>
+                                        _copyJoinCode(room.joinCode!),
+                                    tooltip: 'Copy code',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 12),
                             if (!room.isExpired)
                               Row(
                                 children: [
                                   Expanded(
                                     child: ElevatedButton(
-                                      onPressed: () {
-                                        // Navigate to room chat
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (ctx) =>
-                                                ConfessionRoomChatScreen(
-                                              roomId: room.id,
-                                              roomName: room.roomName,
-                                            ),
-                                          ),
-                                        );
-                                      },
+                                      onPressed: hasStarted
+                                          ? () {
+                                              // Navigate to room chat
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (ctx) =>
+                                                      ConfessionRoomChatScreen(
+                                                    roomId: room.id,
+                                                    roomName: room.roomName,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          : null,
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor:
                                             AppConstants.primaryBlue,
+                                        foregroundColor: Colors.white,
                                       ),
-                                      child: const Text('Join Room'),
+                                      child: Text(
+                                        hasStarted
+                                            ? 'Join Room'
+                                            : 'Starts Soon',
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -429,11 +613,24 @@ class _ConfessionRoomChatScreenState extends State<ConfessionRoomChatScreen> {
   final ConfessionRoomsService _roomsService = ConfessionRoomsService();
   final TextEditingController _messageController = TextEditingController();
   List<Map<String, dynamic>> _messages = [];
+  ConfessionRoomModel? _room;
 
   @override
   void initState() {
     super.initState();
+    _loadRoomInfo();
     _loadMessages();
+  }
+
+  Future<void> _loadRoomInfo() async {
+    try {
+      final room = await _roomsService.getRoom(widget.roomId);
+      if (mounted) {
+        setState(() => _room = room);
+      }
+    } catch (e) {
+      debugPrint('Error loading room info: $e');
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -497,6 +694,79 @@ class _ConfessionRoomChatScreenState extends State<ConfessionRoomChatScreen> {
       ),
       body: Column(
         children: [
+          if ((_room?.rules ?? '').isNotEmpty ||
+              (_room?.pinnedMessage ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Column(
+                children: [
+                  if ((_room?.rules ?? '').isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppConstants.darkGray,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppConstants.primaryBlue.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Room Rules',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _room!.rules!,
+                            style: const TextStyle(
+                              color: AppConstants.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if ((_room?.pinnedMessage ?? '').isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppConstants.primaryBlue.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppConstants.primaryBlue.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.push_pin_rounded,
+                            size: 18,
+                            color: AppConstants.primaryBlue,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _room!.pinnedMessage!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Expanded(
             child: _messages.isEmpty
                 ? const Center(

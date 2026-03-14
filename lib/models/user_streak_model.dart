@@ -45,8 +45,23 @@ class UserStreakModel {
 
   /// Check if user qualifies for automatic verification
   bool get isEligibleForVerification {
-    // Requirements: 12+ posts AND posts with engagement
+    // Defaults retained for legacy callers.
     return totalPosts >= 12 && postsWithEngagement >= 5;
+  }
+
+  bool isEligibleForVerificationWith(
+    int totalPostsRequired,
+    int engagedPostsRequired,
+    int totalEngagementRequired,
+    double avgLikesRequired, {
+    required int totalEngagement,
+    required double avgLikes,
+  }) {
+    if (totalPosts < totalPostsRequired) return false;
+    if (postsWithEngagement < engagedPostsRequired) return false;
+    if (totalEngagement < totalEngagementRequired) return false;
+    if (avgLikes < avgLikesRequired) return false;
+    return true;
   }
 
   /// Get verification progress (0-100%)
@@ -55,6 +70,44 @@ class UserStreakModel {
     final engagementProgress =
         (postsWithEngagement / 5 * 50).clamp(0, 50).toInt();
     return postProgress + engagementProgress;
+  }
+
+  int verificationProgressWith({
+    required int totalPostsRequired,
+    required int engagedPostsRequired,
+    required int totalEngagementRequired,
+    required double avgLikesRequired,
+    required int totalEngagement,
+    required double avgLikes,
+  }) {
+    final activeRequirements = [
+      totalPostsRequired > 0,
+      engagedPostsRequired > 0,
+      totalEngagementRequired > 0,
+      avgLikesRequired > 0,
+    ].where((v) => v).length;
+
+    if (activeRequirements == 0) return 100;
+
+    final weight = 100 / activeRequirements;
+    double progress = 0;
+
+    if (totalPostsRequired > 0) {
+      progress += (totalPosts / totalPostsRequired).clamp(0, 1) * weight;
+    }
+    if (engagedPostsRequired > 0) {
+      progress +=
+          (postsWithEngagement / engagedPostsRequired).clamp(0, 1) * weight;
+    }
+    if (totalEngagementRequired > 0) {
+      progress +=
+          (totalEngagement / totalEngagementRequired).clamp(0, 1) * weight;
+    }
+    if (avgLikesRequired > 0) {
+      progress += (avgLikes / avgLikesRequired).clamp(0, 1) * weight;
+    }
+
+    return progress.clamp(0, 100).round();
   }
 
   UserStreakModel copyWith({

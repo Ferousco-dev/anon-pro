@@ -43,6 +43,7 @@ dependencies:
   flutter_svg: ^2.0.9
   uuid: ^4.2.2
   flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
   path: ^1.9.0
 
   # Firebase (updated versions)
@@ -57,12 +58,19 @@ dependencies:
   sqflite: ^2.4.2
   connectivity_plus: ^7.0.0
   home_widget: ^0.7.0
+  google_generative_ai: ^0.4.7
+  lottie: ^3.3.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
+  build_runner: ^2.4.13
+  hive_generator: ^2.0.1
 
 flutter_launcher_icons:
   android: "launcher_icon"
@@ -77,6 +85,9 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/knowledge.json
+    - assets/knowledge/
+    - .env
 
   # Add custom fonts if needed
   # fonts:

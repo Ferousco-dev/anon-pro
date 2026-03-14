@@ -36,6 +36,7 @@ import '../../services/broadcast_service.dart';
 import '../../widgets/broadcast_modal.dart';
 import '../../widgets/liquid_glass_nav_bar.dart';
 import '../../services/widget_data_service.dart';
+import '../../widgets/ai_floating_button.dart';
 // Supabase client getter
 final supabase = Supabase.instance.client;
 
@@ -51,6 +52,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
   final ScrollController _scrollController = ScrollController();
   late PageController _pageController;
   List<PostModel> _posts = [];
+  List<PostModel> _trendingPosts = [];
   UserModel? _currentUser;
   bool _isLoading = true;
   bool _isLoadingStatuses = false;
@@ -252,7 +254,43 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       await Future.wait([
         _loadPosts(),
         _loadStatuses(),
+        _loadTrendingPosts(),
       ]);
+    }
+  }
+
+  Future<void> _loadTrendingPosts() async {
+    try {
+      final nowIso = DateTime.now().toIso8601String();
+      final response = await supabase
+          .from('posts')
+          .select('''
+            *,
+            users (
+              id,
+              alias,
+              display_name,
+              profile_image_url,
+              is_verified,
+              role
+            )
+          ''')
+          .eq('is_anonymous', false)
+          .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+          .or('expires_at.is.null,expires_at.gt.$nowIso')
+          .order('likes_count', ascending: false)
+          .order('comments_count', ascending: false)
+          .order('shares_count', ascending: false)
+          .limit(12);
+
+      final posts = (response as List)
+          .map((p) => PostModel.fromJson(p as Map<String, dynamic>))
+          .toList();
+      if (mounted) {
+        setState(() => _trendingPosts = posts);
+      }
+    } catch (e) {
+      debugPrint('Error loading trending posts: $e');
     }
   }
 
@@ -308,16 +346,20 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
         params: {'user_uuid': currentUser.id},
       );
 
-
-
+      final hiddenResponse = await supabase
+          .from('user_hidden_statuses')
+          .select('status_id')
+          .eq('user_id', currentUser.id);
+      final hiddenIds = (hiddenResponse as List<dynamic>)
+          .map((row) => row['status_id'] as String)
+          .toSet();
 
       final statuses = (response as List<dynamic>)
           .map(
             (row) => StatusModel.fromJson(row as Map<String, dynamic>),
           )
+          .where((status) => !hiddenIds.contains(status.id))
           .toList();
-
-
 
       // Group statuses by user to build proper story-style sequences
       final Map<String, List<StatusModel>> grouped = {};
@@ -391,9 +433,12 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
 
   Future<void> _loadPosts() async {
     try {
+      final nowIso = DateTime.now().toIso8601String();
 
       // COMPLETE QUERY: Include all fields needed by UserModel
-      final response = await supabase.from('posts').select('''
+      final response = await supabase
+          .from('posts')
+          .select('''
             *,
             users (
               id,
@@ -412,7 +457,11 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
               created_at,
               updated_at
             )
-          ''').order('created_at', ascending: false).limit(50);
+          ''')
+          .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+          .or('expires_at.is.null,expires_at.gt.$nowIso')
+          .order('created_at', ascending: false)
+          .limit(50);
 
 
       final posts = (response as List).map((postData) {
@@ -1228,7 +1277,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     return LiquidGlassNavBar(
       selectedIndex: _selectedTab,
       profileImageUrl: _currentUser?.profileImageUrl,
-      onTap: (index) {
+      onTap: (index) async {
         setState(() => _selectedTab = index);
         if (index == 0 || index == 1) {
           _pageController.animateToPage(
@@ -1236,11 +1285,13 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
           );
-        } else if (index == 2) {
-          Navigator.pushNamed(context, '/groups');
+          return;
+        }
+        if (index == 2) {
+          await Navigator.pushNamed(context, '/groups');
         } else if (index == 3) {
           if (_currentUser != null) {
-            Navigator.pushNamed(context, '/profile',
+            await Navigator.pushNamed(context, '/profile',
                 arguments: _currentUser!.id);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -1251,6 +1302,10 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
               ),
             );
           }
+        }
+        if (mounted) {
+          final page = _pageController.page?.round() ?? 0;
+          setState(() => _selectedTab = page.clamp(0, 1));
         }
       },
     );
@@ -1269,19 +1324,33 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
                 await Future.wait([
                   _loadPosts(),
                   _loadStatuses(),
+                  _loadTrendingPosts(),
                 ]);
               },
               child: ListView.builder(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.zero,
-                itemCount: 1 + _posts.length,
+                itemCount: 1 +
+                    _posts.length +
+                    (_trendingPosts.isNotEmpty ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return _buildStatusBar();
                   }
+                  final trendingInsertIndex =
+                      1 + (_posts.length > 20 ? 20 : _posts.length);
+                  if (_trendingPosts.isNotEmpty &&
+                      index == trendingInsertIndex) {
+                    return _buildTrendingSection();
+                  }
 
-                  final post = _posts[index - 1];
+                  var postIndex = index - 1;
+                  if (_trendingPosts.isNotEmpty &&
+                      index > trendingInsertIndex) {
+                    postIndex -= 1;
+                  }
+                  final post = _posts[postIndex];
 
                   return PostCard(
                     post: post,
@@ -1344,6 +1413,124 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       },
       onCreateStatus: _createStatus,
       uploadProgress: _uploadProgress,
+    );
+  }
+
+  Widget _buildTrendingSection() {
+    if (_trendingPosts.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Trending Now',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 140,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _trendingPosts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final post = _trendingPosts[index];
+                final author =
+                    post.user?.displayName ?? post.user?.alias ?? 'Anon';
+
+                return GestureDetector(
+                  onTap: () => _showComments(post),
+                  child: Container(
+                    width: 220,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppConstants.darkGray,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppConstants.primaryBlue.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (post.user?.isVerifiedUser ?? false)
+                              const Icon(
+                                Icons.verified_rounded,
+                                size: 16,
+                                color: AppConstants.primaryBlue,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Expanded(
+                          child: Text(
+                            post.content.isNotEmpty
+                                ? post.content
+                                : 'Shared a moment',
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppConstants.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.favorite_rounded,
+                                size: 14, color: Colors.red),
+                            const SizedBox(width: 4),
+                            Text(
+                              post.likesCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Icon(Icons.chat_bubble_rounded,
+                                size: 14, color: AppConstants.primaryBlue),
+                            const SizedBox(width: 4),
+                            Text(
+                              post.commentsCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1458,16 +1645,24 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
                     const AnonymousScreen(),
                   ],
                 ),
-          floatingActionButton: FloatingActionButton(
-            onPressed:
-                _selectedTab == 0 ? _showCreatePost : _showAnonymousCreatePost,
-            backgroundColor: AppConstants.primaryBlue,
-            elevation: 4,
-            child: Icon(
-                _selectedTab == 0
-                    ? Icons.edit_rounded
-                    : Icons.person_off_rounded,
-                size: 24),
+          floatingActionButton: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const AiFloatingButton(),
+              const SizedBox(height: 16),
+              FloatingActionButton(
+                heroTag: 'create_post_fab',
+                onPressed:
+                    _selectedTab == 0 ? _showCreatePost : _showAnonymousCreatePost,
+                backgroundColor: AppConstants.primaryBlue,
+                elevation: 4,
+                child: Icon(
+                    _selectedTab == 0
+                        ? Icons.edit_rounded
+                        : Icons.person_off_rounded,
+                    size: 24),
+              ),
+            ],
           ),
           bottomNavigationBar: _buildAnimatedBottomNav(),
         ));

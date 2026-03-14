@@ -159,6 +159,12 @@ class AuthService {
     String? bio,
     String? avatarUrl,
     String? profileImageUrl,
+    String? coverImageUrl,
+    String? profileTheme,
+    String? customEmoji,
+    String? profileLink,
+    String? highlightPostId,
+    String? dmPrivacy,
   }) async {
     if (!isAuthenticated) {
       throw Exception('User not authenticated');
@@ -170,6 +176,14 @@ class AuthService {
       if (displayName != null) updates['display_name'] = displayName;
       if (alias != null) updates['alias'] = alias;
       if (bio != null) updates['bio'] = bio;
+      if (coverImageUrl != null) updates['cover_image_url'] = coverImageUrl;
+      if (profileTheme != null) updates['profile_theme'] = profileTheme;
+      if (customEmoji != null) updates['custom_emoji'] = customEmoji;
+      if (profileLink != null) updates['profile_link'] = profileLink;
+      if (highlightPostId != null) {
+        updates['highlight_post_id'] = highlightPostId;
+      }
+      if (dmPrivacy != null) updates['dm_privacy'] = dmPrivacy;
 
       // Some parts of the app use profile_image_url; initial schema used avatar_url.
       // Update both when provided so UI stays consistent.

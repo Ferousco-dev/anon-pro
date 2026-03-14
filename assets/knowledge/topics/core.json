@@ -1,0 +1,352 @@
+{
+  "main_features": {
+    "posts": {
+      "description": "Users can create and share text-based posts anonymously or under their chosen username.",
+      "capabilities": [
+        "Create posts",
+        "Share anonymous confessions",
+        "Post with username",
+        "Edit/delete own posts",
+        "Repost content",
+        "Add images/media"
+      ]
+    },
+    "interactions": {
+      "description": "Users can engage with posts through likes (upvotes) and comments. Engagement drives community interaction.",
+      "engagement_types": [
+        "Like/Upvote posts",
+        "Comment on posts",
+        "Like comments",
+        "Repost to share with followers"
+      ]
+    },
+    "reputation_system": {
+      "description": "Users build reputation through karma earned from post/comment interactions.",
+      "mechanism": "High karma indicates a trusted, popular, or influential community member.",
+      "visibility": "Karma is displayed on user profiles and posts for community credibility."
+    },
+    "anonymous_mode": {
+      "description": "Post completely anonymously without revealing your identity. All posts have an 'Anonymous' user.",
+      "benefits": [
+        "Complete privacy",
+        "No fear of judgment",
+        "Honest expression",
+        "Safe space for confessions"
+      ]
+    },
+    "direct_messaging": {
+      "description": "Private 1-on-1 conversations with other users. Users can send text messages and media.",
+      "privacy_controls": [
+        "DM privacy settings (everyone, verified_only, followers_only)",
+        "Block/Report users",
+        "View conversation history"
+      ],
+      "features": [
+        "One-on-one chats",
+        "Start conversations from profiles",
+        "User search",
+        "Message notifications"
+      ]
+    },
+    "group_chats": {
+      "description": "Create and participate in group conversations with multiple users.",
+      "features": [
+        "Create groups",
+        "Add/remove members",
+        "Group chat history"
+      ]
+    },
+    "confession_rooms": {
+      "description": "Thematic chat rooms focused on specific topics where users can discuss confessions anonymously.",
+      "purpose": "Safe spaces for users to discuss sensitive topics with like-minded community members.",
+      "features": [
+        "Topic-based rooms",
+        "Anonymous participation",
+        "Real-time chat",
+        "Moderation for safety"
+      ]
+    },
+    "ask_anything_qa": {
+      "description": "Users can ask other community members questions anonymously and get public answers.",
+      "features": [
+        "Ask anonymous questions",
+        "Receive public answers",
+        "Answer questions from your followers",
+        "Build thought leadership"
+      ],
+      "privacy": "Questions and answers are public and can help others in the community."
+    },
+    "user_stories_status": {
+      "description": "24-hour ephemeral stories/status updates that disappear after 24 hours, just like other social platforms.",
+      "features": [
+        "Upload images/videos as statuses",
+        "Only visible to followers",
+        "View status feeds",
+        "Auto-delete after 24 hours"
+      ]
+    },
+    "user_verification": {
+      "description": "System to verify trusted, authentic users in the community.",
+      "levels": [
+        "None - Regular user",
+        "Verified - Trusted community member",
+        "Premium Verified - Special status users"
+      ],
+      "benefits": [
+        "Verified badge on profile",
+        "Higher visibility",
+        "Trust indicator",
+        "Access to special features"
+      ],
+      "admin_controlled": "Only admins can verify or unverify users."
+    },
+    "user_streaks": {
+      "description": "Gamification feature tracking consecutive days of engagement on the platform.",
+      "mechanics": "Users maintain streaks by posting or engaging daily.",
+      "display": "Streaks shown on user profiles as motivation for consistent engagement."
+    },
+    "broadcasts": {
+      "description": "One-to-many messaging feature allowing users to send announcements to their followers.",
+      "use_case": "Share important updates, news, or content to all followers at once.",
+      "features": [
+        "Send broadcast messages",
+        "Reach all followers instantly"
+      ]
+    },
+    "polls": {
+      "description": "Create and participate in polls within posts to gather community opinions.",
+      "features": [
+        "Create with multiple options",
+        "Vote on polls",
+        "View results",
+        "Engage community opinion"
+      ]
+    },
+    "admin_panel": {
+      "description": "Administrative interface for moderating and managing the platform.",
+      "admin_controls": [
+        "Ban/unban users",
+        "Verify/unverify users",
+        "Grant/revoke admin roles",
+        "View activity logs",
+        "Monitor platform health",
+        "Manage feedback/reports"
+      ]
+    },
+    "notifications": {
+      "description": "Real-time alerts for user interactions and activities.",
+      "notification_types": [
+        "Follow notifications",
+        "Post likes",
+        "Comments on posts",
+        "Message notifications",
+        "Reposts of content",
+        "Q&A responses"
+      ]
+    },
+    "dark_mode": {
+      "description": "Sleek dark-themed UI for comfortable viewing in low-light environments."
+    },
+    "search": {
+      "description": "Search for users, posts, and content across the platform.",
+      "features": [
+        "Search by username",
+        "Find users by display name",
+        "Discover content"
+      ]
+    },
+    "offline_support": {
+      "description": "App has offline mode support with caching and sync capabilities.",
+      "features": [
+        "View cached posts offline",
+        "Queue posts for sync",
+        "Offline sync on reconnect"
+      ]
+    }
+  },
+  "app_navigation_guide": {
+    "create_post": "Navigate to Home screen and tap the Floating Action Button (+ icon) or tap the 'Create Post' field at the top to compose.",
+    "edit_profile": "Go to Profile tab (bottom right), tap your avatar/profile header, then select 'Edit Profile' to update bio, avatar, cover image, and privacy settings.",
+    "view_notifications": "Tap the Notifications/Bell icon (usually top navbar) to see new interactions: likes, comments, follows, messages, reposts.",
+    "direct_messaging": "In Inbox tab, either search for a user in 'User Search' or tap an existing conversation. Start messaging in the 'Conversation Screen'.",
+    "confession_rooms": "From Profile or Home, navigate to 'Confession Rooms' to browse topic-based chat rooms and participate anonymously.",
+    "ask_questions": "On any user's profile, tap 'Ask Me' or 'Ask Anything' to submit an anonymous question they can publicly answer.",
+    "view_stories": "In Home or Profile, tap the Stories/Status section to view 24-hour ephemeral updates from followed users.",
+    "admin_functions": "If admin, access 'Admin Panel' from settings (requires admin role). From there you can ban users, verify users, view logs, and manage platform.",
+    "search": "Use the search icon (magnifying glass) to find users, posts, or content across the platform.",
+    "follow_users": "Tap the Follow button on any user's profile to see their posts in your feed and receive their status updates.",
+    "set_privacy": "In Profile > Settings, adjust DM Privacy, QA settings, and other privacy preferences."
+  },
+  "app_screens": {
+    "home": "Main feed showing posts from followed users and recommended posts. Can create new posts here.",
+    "anonymous": "View posts from all users posting anonymously. Pure anonymous content discovery.",
+    "stories": "24-hour ephemeral stories/status updates from followed users in story format.",
+    "inbox": "Direct messages, group chats, and notification center. Start new conversations.",
+    "profile": "User's own profile or any other user's profile showing posts, followers, verification status, streaks, and stats.",
+    "confession_rooms": "Browse and chat in thematic confession rooms for anonymous discussions.",
+    "admin_panel": "Available only to admin users. Manage users, verify accounts, ban users, view logs.",
+    "search": "Search for users and content across the platform.",
+    "settings": "Account settings, privacy preferences, notifications, blocks, theme, etc.",
+    "verification": "Track verification progress if user is pursuing verification.",
+    "qa_section": "Ask and answer questions anonymously from profile.",
+    "broadcasts": "Send announcements to followers in bulk."
+  },
+  "user_roles_and_status": {
+    "roles": [
+      {
+        "role": "Regular User",
+        "capabilities": "Create posts, comment, like, follow, send messages"
+      },
+      {
+        "role": "Verified User",
+        "capabilities": "All regular user abilities + verified badge + can optionally collect payments/tips"
+      },
+      {
+        "role": "Admin",
+        "capabilities": "Access admin panel, ban users, verify users, view activity logs, manage platform content"
+      }
+    ],
+    "account_status": [
+      "Active - User can access all features",
+      "Banned - User has been restricted from platform access",
+      "Verified - User has been verified by admins"
+    ],
+    "privacy_settings": [
+      "DM Privacy: Everyone, Verified Only, or Followers Only",
+      "QA Enabled: Turn questions from followers on/off",
+      "Profile Visibility: Control who can see profile"
+    ]
+  },
+  "feed_system": {
+    "home_feed": "Shows posts from users you follow and recommended posts.",
+    "anonymous_feed": "Displays anonymous posts from the entire community.",
+    "feed_actions": [
+      "Like post",
+      "Comment",
+      "Repost",
+      "Save post",
+      "Share post"
+    ],
+    "feed_sorting": [
+      "Latest posts",
+      "Trending posts",
+      "Recommended posts"
+    ]
+  },
+  "post_types": {
+    "text_posts": "Simple posts where users share thoughts or confessions.",
+    "media_posts": "Posts that include images or media attachments.",
+    "poll_posts": "Posts with poll options that users can vote on.",
+    "anonymous_posts": "Posts made without revealing the poster's identity."
+  },
+  "reaction_system": {
+    "likes": "Users can like posts to show appreciation.",
+    "comment_likes": "Users can like comments.",
+    "engagement_importance": "High engagement helps posts reach more users."
+  },
+  "notifications_guide": {
+    "enable_notifications": "Notifications can be enabled or disabled in Settings > Notifications.",
+    "types": [
+      "Likes",
+      "Comments",
+      "New followers",
+      "Messages",
+      "Q&A responses"
+    ]
+  },
+  "notification_behavior": {
+    "like_notification": "You receive a notification when someone likes your post.",
+    "comment_notification": "You receive a notification when someone comments on your post.",
+    "follow_notification": "You receive a notification when someone follows you.",
+    "message_notification": "You receive a notification when someone sends you a message."
+  },
+  "user_profile_features": {
+    "profile_elements": [
+      "Username",
+      "Avatar/Profile picture",
+      "Bio/Description",
+      "Follower count",
+      "Following count",
+      "Karma score",
+      "User streak"
+    ],
+    "profile_actions": [
+      "Follow user",
+      "Unfollow user",
+      "Block user",
+      "Report user",
+      "Send direct message"
+    ],
+    "profile_customization": [
+      "Change avatar",
+      "Edit bio",
+      "Update username",
+      "Adjust privacy settings"
+    ]
+  },
+  "followers_system": {
+    "following": "When you follow someone, their posts appear more often in your feed.",
+    "followers": "Followers are users who subscribe to your content updates.",
+    "benefits_of_following": [
+      "Personalized feed",
+      "Story visibility",
+      "Easier interaction"
+    ]
+  },
+  "content_discovery": {
+    "feed_algorithm": "Posts shown in the feed are based on engagement, user follows, and trending activity.",
+    "recommended_posts": "The system suggests posts that match your interests and community engagement patterns.",
+    "trending_posts": "Posts with high engagement (likes, comments, reposts) may appear in trending sections."
+  },
+  "advanced_features": {
+    "content_combinations": {
+      "posts_with_polls": "Add polls to posts to gather quick community opinions and boost engagement.",
+      "posts_with_media": "Images and videos get 3x more engagement than text-only posts.",
+      "stories_with_engagement": "Post stories to stay top-of-mind with followers. Encourage them to DM you about your story.",
+      "confession_rooms_strategy": "Build influence by being a helpful regular in 2-3 confession rooms related to your expertise."
+    },
+    "growth_hacks": {
+      "first_48_hours": "Post content in first 48 hours to maximize algorithmic boost. Comment on trending posts.",
+      "engagement_loop": "Post → Others engage → You reply → More visibility → More followers → Higher karma.",
+      "collaboration": "Reach out to users with similar interests for engagement swaps (mention each other's content).",
+      "ask_me_anything": "Submit interesting questions to Answer-focused users. Their answers bring their followers to your profile.",
+      "timezone_advantage": "Post when followers most active in their timezone. Early morning and evening typically best.",
+      "consistency_compounds": "Posting 3x per week for 2 months builds significantly more followers than sporadic posting."
+    },
+    "feature_exploration": {
+      "easter_eggs": "Check settings and menus for hidden features and customization options.",
+      "keyboard_shortcuts": "Some features have quick shortcuts available on web and desktop versions.",
+      "accessibility": "AnonPro supports screen readers and accessibility features for all users.",
+      "customization": "Personalize your experience with privacy settings, notification preferences, and display options."
+    }
+  },
+  "advanced_features_guide": {
+    "status_strategy": "Post stories regularly to stay visible. 24-hour disappearance = low commitment way to share moments.",
+    "confession_room_etiquette": [
+      "Be respectful",
+      "No harassment",
+      "Stay on topic",
+      "Support others",
+      "Privacy for all",
+      "No sharing identities"
+    ],
+    "group_chat_management": "Create groups for close friends or communities. Add/remove members as needed.",
+    "polling_best_practices": "Ask genuine questions, non-controversial topics work best, 2-4 options optimal.",
+    "announcement_broadcasts": "Use broadcasts for important updates to all followers at once.",
+    "cross_posting": "Repost good content to expose followers to quality material."
+  },
+  "feature_suggestions": {
+    "if_user_likes_posts": "You might enjoy creating your own post to share your thoughts.",
+    "if_user_joins_rooms": "You might enjoy exploring other confession rooms.",
+    "if_user_messages": "Try starting a group chat with friends."
+  },
+  "future_features": {
+    "planned_features": [
+      "Community events",
+      "Voice chat rooms",
+      "Advanced content discovery",
+      "AI moderation tools",
+      "Creator monetization"
+    ]
+  }
+}

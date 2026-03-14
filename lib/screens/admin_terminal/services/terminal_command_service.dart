@@ -29,6 +29,11 @@ class TerminalCommandService {
     if (lower == 'list of streaks') return await _listStreaks();
     if (lower == 'shutdown') return await _shutdown();
     if (lower == 'view reports') return await _viewReports();
+    if (lower == 'view passcode') return await _viewPasscode();
+    if (lower.startsWith('change passcode')) {
+      final newPass = input.substring('change passcode'.length).trim();
+      return await _changePasscode(newPass);
+    }
 
     // --- Single-word + argument commands ---
     final parts = input.split(RegExp(r'\s+'));
@@ -65,7 +70,8 @@ class TerminalCommandService {
   /// Prevent obvious injection attacks.
   bool _isSafeInput(String input) {
     // Block SQL-like patterns and shell escape sequences
-    final blocked = RegExp(r"(;|--|'|\\x|DROP\s|INSERT\s|UPDATE\s|DELETE\s.*FROM)",
+    final blocked = RegExp(
+        r"(;|--|'|\\x|DROP\s|INSERT\s|UPDATE\s|DELETE\s.*FROM)",
         caseSensitive: false);
     return !blocked.hasMatch(input);
   }
@@ -94,6 +100,10 @@ CONTENT
   delete post <POST_ID>  — Delete a post by ID
   broadcast <message>    — Send broadcast to all users
   view reports           — View reported content
+
+SECURITY
+  view passcode                  — Display current passcode
+  change passcode <NEW>          — Change admin terminal passcode
 
 MAINTENANCE
   shutdown               — Toggle maintenance mode
@@ -250,14 +260,10 @@ UTILITY
     try {
       final users = await _supabase.from('users').select('id');
       final posts = await _supabase.from('posts').select('id');
-      final verified = await _supabase
-          .from('users')
-          .select('id')
-          .eq('is_verified', true);
-      final unverified = await _supabase
-          .from('users')
-          .select('id')
-          .eq('is_verified', false);
+      final verified =
+          await _supabase.from('users').select('id').eq('is_verified', true);
+      final unverified =
+          await _supabase.from('users').select('id').eq('is_verified', false);
       final banned =
           await _supabase.from('users').select('id').eq('is_banned', true);
 
@@ -283,8 +289,7 @@ UTILITY
       } catch (_) {}
 
       try {
-        final anon =
-            await _supabase.from('anonymous_questions').select('id');
+        final anon = await _supabase.from('anonymous_questions').select('id');
         anonCount = (anon as List).length;
       } catch (_) {}
 
@@ -313,9 +318,7 @@ Total Comments:      $commentsCount
           .select('alias')
           .order('created_at', ascending: true);
 
-      final users = (res as List)
-          .map((u) => '@${u['alias']}')
-          .toList();
+      final users = (res as List).map((u) => '@${u['alias']}').toList();
 
       if (users.isEmpty) return 'No users found.';
 
@@ -397,7 +400,8 @@ Total Comments:      $commentsCount
     try {
       final res = await _supabase
           .from('user_reports')
-          .select('id, reason, description, created_at, reporter_id, reported_id')
+          .select(
+              'id, reason, description, created_at, reporter_id, reported_id')
           .order('created_at', ascending: false)
           .limit(20);
 
@@ -446,8 +450,7 @@ Total Comments:      $commentsCount
           .from('app_settings')
           .update({'maintenance_mode': newMode}).eq('id', 1);
 
-      await _logAction(
-          'toggle_maintenance', {'maintenance_mode': newMode});
+      await _logAction('toggle_maintenance', {'maintenance_mode': newMode});
 
       return newMode
           ? 'MAINTENANCE MODE: ENABLED\nNormal users will see maintenance screen.\nAdmins can still access the app.'
@@ -459,8 +462,7 @@ Total Comments:      $commentsCount
 
   // ─── Activity logging ──────────────────────────────────────
 
-  Future<void> _logAction(
-      String action, Map<String, dynamic> details) async {
+  Future<void> _logAction(String action, Map<String, dynamic> details) async {
     try {
       final adminId = _supabase.auth.currentUser?.id;
       if (adminId != null) {
@@ -472,6 +474,99 @@ Total Comments:      $commentsCount
       }
     } catch (e) {
       debugPrint('Error logging terminal action: $e');
+    }
+  }
+
+  // ─── Admin Passcode Management ────────────────────────────
+
+  Future<String> _viewPasscode() async {
+    try {
+      final res = await _supabase
+          .from('admin_passcode')
+          .select('passcode, created_at, updated_at, changed_count')
+          .single();
+
+      final passcode = res['passcode'];
+      final createdAt = res['created_at'];
+      final updatedAt = res['updated_at'];
+      final changedCount = res['changed_count'];
+
+      return '''CURRENT ADMIN PASSCODE
+═══════════════════════════════════════════
+Passcode: $passcode
+Created: $createdAt
+Last Updated: $updatedAt
+Times Changed: $changedCount
+
+⚠️  Keep this passcode secure!
+⚠️  To change: change passcode <NEW_PASSCODE>''';
+    } catch (e) {
+      return 'ERROR: Failed to retrieve passcode — $e';
+    }
+  }
+
+  Future<String> _changePasscode(String newPasscode) async {
+    try {
+      // Validate length and characters
+      if (newPasscode.isEmpty) {
+        return 'ERROR: Passcode cannot be empty.';
+      }
+      if (newPasscode.length < 4 || newPasscode.length > 20) {
+        return 'ERROR: Passcode must be 4-20 characters long.';
+      }
+
+      // Validate alphanumeric + special chars (only _-@!#\$%^&*())
+      final validCharsRegex = RegExp(r'^[a-zA-Z0-9_\-@!#\$%^&*()]+$');
+      if (!validCharsRegex.hasMatch(newPasscode)) {
+        return 'ERROR: Passcode can only contain letters, numbers, and _-@!#\$%^&*()';
+      }
+
+      // Get current passcode for audit log
+      final current =
+          await _supabase.from('admin_passcode').select('passcode').single();
+      final oldPasscode = current['passcode'];
+
+      // Get current admin ID
+      final adminId = _supabase.auth.currentUser?.id;
+      if (adminId == null) {
+        return 'ERROR: Admin not authenticated.';
+      }
+
+      // Update passcode
+      await _supabase.from('admin_passcode').update({
+        'passcode': newPasscode,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': adminId,
+        'changed_count': (current['changed_count'] ?? 0) + 1,
+        'last_changed_by': adminId,
+        'last_changed_at': DateTime.now().toIso8601String(),
+      }).eq('id', current['id']);
+
+      // Log to audit table
+      await _supabase.from('admin_passcode_audit').insert({
+        'changed_by': adminId,
+        'old_passcode': oldPasscode,
+        'new_passcode': newPasscode,
+        'changed_at': DateTime.now().toIso8601String(),
+        'reason': 'Changed via admin terminal',
+      });
+
+      // Log action
+      await _logAction('change_passcode', {
+        'old_passcode_length': oldPasscode.length,
+        'new_passcode_length': newPasscode.length,
+      });
+
+      return '''SUCCESS: Admin passcode changed!
+═══════════════════════════════════════════
+New Passcode: $newPasscode
+Updated By: $adminId
+Timestamp: ${DateTime.now().toString()}
+
+✓ Change logged to audit table
+✓ Previous passcode saved for compliance''';
+    } catch (e) {
+      return 'ERROR: Failed to change passcode — $e';
     }
   }
 }

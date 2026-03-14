@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
 import '../../main.dart';
+import '../../models/chat_model.dart';
+import '../inbox/conversation_screen.dart';
+import '../inbox/user_search_screen.dart';
+import '../inbox/group_discover_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -57,18 +61,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   void _navigateToConversation(Map<String, dynamic> conversation) {
-    // TODO: Navigate to conversation detail screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content:
-              Text('Opening conversation: ${conversation['name'] ?? 'Chat'}')),
+    final data = Map<String, dynamic>.from(conversation);
+    data['created_at'] ??= DateTime.now().toIso8601String();
+    data['updated_at'] ??= DateTime.now().toIso8601String();
+    final chat = ChatModel.fromJson(data);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ConversationScreen(chat: chat)),
     );
   }
 
   void _startNewChat() {
-    // TODO: Show user search to start new conversation
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('New chat coming soon!')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const UserSearchScreen()),
     );
   }
 
@@ -122,9 +128,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              // TODO: Navigate to search screen
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Search coming soon!')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const GroupDiscoverScreen()),
               );
             },
             icon: const Icon(Icons.search, color: AppConstants.white),

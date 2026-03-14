@@ -1,0 +1,97 @@
+{
+  "community_values": {
+    "core_values": [
+      "Respect",
+      "Privacy",
+      "Honesty",
+      "Freedom of expression"
+    ],
+    "encouraged_behavior": [
+      "Support other users",
+      "Respect anonymity",
+      "Engage in meaningful discussions"
+    ]
+  },
+  "engagement_and_community": {
+    "how_to_grow_audience": [
+      "Post consistently and authentically",
+      "Engage with other users' content",
+      "Use confession rooms for discovery",
+      "Answer Q&A questions thoughtfully",
+      "Maintain your streaks for visibility",
+      "Be respectful and helpful"
+    ],
+    "best_practices_for_posts": [
+      "Be authentic and genuine",
+      "Write engaging captions",
+      "Use clear, readable format",
+      "Respect community guidelines",
+      "Respond to comments",
+      "Share diverse content"
+    ],
+    "engaging_with_others": [
+      "Like posts you genuinely enjoy",
+      "Leave thoughtful comments",
+      "Answer anonymous questions",
+      "Participate in confession rooms",
+      "Share insights with community"
+    ],
+    "building_followers": "Followers see your posts in their feed. Build genuine follower base through quality content and respectful engagement.",
+    "collaboration_opportunities": "Tag friends in comments, answer their Q&As, participate in group discussions, repost great content."
+  },
+  "user_engagement_tips": {
+    "grow_followers": [
+      "Post regularly",
+      "Engage with other users by commenting and liking",
+      "Participate in confession rooms",
+      "Answer questions in the Q&A section"
+    ],
+    "increase_karma": [
+      "Share meaningful posts",
+      "Provide helpful comments",
+      "Participate in community discussions",
+      "Avoid spam behavior"
+    ]
+  },
+  "engagement_insights": {
+    "what_to_post": {
+      "high_engagement": "Authentic confessions, relatable advice, controversial (but respectful) opinions, helpful tips, funny observations.",
+      "medium_engagement": "Daily life updates, thoughts on trends, questions for followers, updates on your projects.",
+      "lower_engagement": "One-word responses, generic comments, off-topic posts, broken media links."
+    },
+    "best_practices": {
+      "post_length": "Sweet spot is 50-300 characters for maximum engagement. Longer posts need compelling hooks.",
+      "media_strategy": "1 high-quality image: 75% more engagement. Video: 2x more comments.",
+      "interaction_timing": "Reply to comments within first hour for 3x more visibility boost.",
+      "hashtag_use": "Use 2-3 relevant hashtags per post. More doesn't help - actually hurts visibility.",
+      "call_to_action": "End with questions or engagement prompts. 'What do you think?' gets 40% more comments."
+    }
+  },
+  "user_scenarios": {
+    "i_want_to": {
+      "make_new_friends": "Use Discover tab, join Confession Rooms related to your interests, participate in discussions, follow interesting users, send thoughtful DMs.",
+      "share_a_secret": "Create an anonymous post in the Anonymous tab. Your identity stays completely private. No one can trace it back to you.",
+      "get_advice": "Post your question anonymously if you want honest answers without judgment. Or use Ask Anything on someone's profile for direct advice.",
+      "find_like_minded_people": "Browse Confession Rooms by topic, join those matching your interests, follow users with similar values, engage with their content.",
+      "protect_my_privacy": "Use anonymous posting, manage DM privacy settings, block users who make you uncomfortable, report inappropriate behavior.",
+      "build_my_reputation": "Post valuable content consistently, engage meaningfully with others, contribute to discussions, build karma through quality interactions.",
+      "stay_updated": "Follow users you care about, enable notifications for important followers, participate in community discussions, check trending content.",
+      "express_myself_freely": "AnonPro is the perfect place! Post anonymously if needed, join confession rooms, share your true thoughts without fear of judgment."
+    },
+    "common_goals": {
+      "goal_engagement": "Post consistently, respond to comments, ask engaging questions, participate in confession rooms, use polls in posts.",
+      "goal_growth": "Content quality matters most. Post valuable insights, be authentic, engage with trending topics, interact with others' content.",
+      "goal_monetization": "Get verified first, then enable monetization. Create content people love, build loyal followers, offer value they want to support.",
+      "goal_community": "Be helpful, supportive, and respectful. Answer questions, offer advice, participate genuinely, lift others up.",
+      "goal_safety": "Use reporting features for bad actors, block problematic users, maintain privacy settings, don't share sensitive personal info."
+    }
+  },
+  "customer_experience": {
+    "support_channels": "Report issues via in-app feedback, visit settings > Help > Contact Support",
+    "response_time": "Support typically responds within 24-48 hours.",
+    "feedback_process": "All user feedback reviewed for features and improvements.",
+    "feature_requests": "Suggest features via feedback. Popular requests prioritized by devs.",
+    "bug_reports": "Report bugs with detailed description and screenshots if possible. Helps us fix issues faster.",
+    "faq_section": "Check FAQ for common questions before contacting support."
+  }
+}

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../main.dart';
 import '../services/auth_service.dart';
+import '../services/maintenance_service.dart';
 import '../providers/connectivity_provider.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -77,6 +78,16 @@ class _SplashScreenState extends State<SplashScreen>
     // Online: verify profile as before, but do not log the user out
     // just because of a transient error.
     try {
+      final shouldBlock =
+          await MaintenanceService().shouldBlockAuthenticated(session.user);
+      if (shouldBlock) {
+        await AuthService().signOut();
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/maintenance');
+        }
+        return;
+      }
+
       final userProfile = await AuthService().getUserProfile(session.user.id);
 
       if (!mounted) return;

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_streak_model.dart';
+import '../models/streak_requirements.dart';
 
 class StreakService {
   static final StreakService _instance = StreakService._internal();
@@ -13,9 +14,35 @@ class StreakService {
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  Future<StreakRequirements> getStreakRequirements() async {
+    try {
+      final res = await _supabase
+          .from('app_settings')
+          .select(
+              'streak_required_posts, streak_required_engaged_posts, streak_required_total_engagement, streak_required_avg_likes')
+          .single();
+      return StreakRequirements.fromMap(res);
+    } catch (e) {
+      debugPrint('Error loading streak requirements: $e');
+      return StreakRequirements.defaults;
+    }
+  }
+
   /// Initialize streak for new user
   Future<void> initializeStreak(String userId) async {
     try {
+      // First check if it exists
+      final existing = await _supabase
+          .from('user_streaks')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existing != null) {
+        return; // Already exists
+      }
+
+      // Create new streak record
       await _supabase.from('user_streaks').insert({
         'user_id': userId,
         'current_streak': 0,
@@ -23,22 +50,36 @@ class StreakService {
         'posts_with_engagement': 0,
       });
     } catch (e) {
-      // Already exists
+      debugPrint('Error initializing streak: $e');
+      // Don't rethrow - initialization is optional
     }
   }
 
-  /// Get user's streak
+  /// Get user's streak (auto-initializes if missing)
   Future<UserStreakModel?> getStreak(String userId) async {
     try {
-      final res = await _supabase
+      var res = await _supabase
           .from('user_streaks')
           .select('*')
           .eq('user_id', userId)
           .maybeSingle();
 
+      if (res == null) {
+        // Try to initialize
+        await initializeStreak(userId);
+
+        // Try to fetch again
+        res = await _supabase
+            .from('user_streaks')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+      }
+
       if (res == null) return null;
       return UserStreakModel.fromJson(res);
     } catch (e) {
+      debugPrint('Error getting streak: $e');
       return null;
     }
   }
@@ -77,7 +118,28 @@ class StreakService {
   Future<bool> _checkAndUnlockVerification(String userId) async {
     try {
       final streak = await getStreak(userId);
-      if (streak == null || !streak.isEligibleForVerification) {
+      if (streak == null) {
+        return false;
+      }
+
+      final requirements = await getStreakRequirements();
+      final totalEngagement = requirements.totalEngagementRequired > 0
+          ? await getTotalEngagement(userId)
+          : 0;
+      final avgLikes = requirements.avgLikesRequired > 0
+          ? await getAverageLikesPerPost(userId)
+          : 0.0;
+
+      final isEligible = streak.isEligibleForVerificationWith(
+        requirements.totalPostsRequired,
+        requirements.engagedPostsRequired,
+        requirements.totalEngagementRequired,
+        requirements.avgLikesRequired,
+        totalEngagement: totalEngagement,
+        avgLikes: avgLikes,
+      );
+
+      if (!isEligible) {
         return false;
       }
 
@@ -179,7 +241,146 @@ class StreakService {
     }
   }
 
-  /// Force post the "I'm now verified" announcement
+  /// Get user's posts from last 30 days
+  Future<List<Map<String, dynamic>>> getPostsHistory(String userId) async {
+    try {
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+
+      final res = await _supabase
+          .from('posts')
+          .select('id, created_at, likes_count, comments_count')
+          .eq('user_id', userId)
+          .gte('created_at', thirtyDaysAgo.toIso8601String())
+          .order('created_at', ascending: false);
+
+      return (res as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('Error fetching posts history: $e');
+      return [];
+    }
+  }
+
+  /// Get daily posts count for last 30 days
+  Future<List<Map<String, int>>> getDailyPostsCount(String userId) async {
+    try {
+      final posts = await getPostsHistory(userId);
+      final dailyMap = <String, int>{};
+
+      for (final post in posts) {
+        final date =
+            DateTime.parse(post['created_at']).toIso8601String().split('T')[0];
+        dailyMap[date] = (dailyMap[date] ?? 0) + 1;
+      }
+
+      // Create 30-day range with 0 for days with no posts
+      final List<Map<String, int>> dailyList = [];
+      for (int i = 29; i >= 0; i--) {
+        final date = DateTime.now().subtract(Duration(days: i));
+        final dateStr = date.toIso8601String().split('T')[0];
+        dailyList.add({
+          'date': int.parse(
+              date.toIso8601String().split('T')[0].replaceAll('-', '')),
+          'count': dailyMap[dateStr] ?? 0,
+        });
+      }
+
+      return dailyList;
+    } catch (e) {
+      debugPrint('Error calculating daily posts: $e');
+      return [];
+    }
+  }
+
+  /// Get engagement history (likes + comments)
+  Future<int> getTotalEngagement(String userId) async {
+    try {
+      final res = await _supabase
+          .from('posts')
+          .select('likes_count, comments_count')
+          .eq('user_id', userId);
+
+      int totalEngagement = 0;
+      for (final post in res) {
+        totalEngagement += (post['likes_count'] as int? ?? 0) +
+            (post['comments_count'] as int? ?? 0);
+      }
+
+      return totalEngagement;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Get average likes per post
+  Future<double> getAverageLikesPerPost(String userId) async {
+    try {
+      final streak = await getStreak(userId);
+      if (streak == null || streak.totalPosts == 0) return 0;
+
+      final totalLikes = await _getTotalLikes(userId);
+      return totalLikes / streak.totalPosts;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Get total likes (helper)
+  Future<int> _getTotalLikes(String userId) async {
+    try {
+      final res = await _supabase
+          .from('posts')
+          .select('likes_count')
+          .eq('user_id', userId);
+
+      int total = 0;
+      for (final post in res) {
+        total += post['likes_count'] as int? ?? 0;
+      }
+      return total;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Request verification (manual)
+  Future<bool> requestVerification(String userId) async {
+    try {
+      final streak = await getStreak(userId);
+      if (streak == null) {
+        return false;
+      }
+
+      final requirements = await getStreakRequirements();
+      final totalEngagement = requirements.totalEngagementRequired > 0
+          ? await getTotalEngagement(userId)
+          : 0;
+      final avgLikes = requirements.avgLikesRequired > 0
+          ? await getAverageLikesPerPost(userId)
+          : 0.0;
+
+      final isEligible = streak.isEligibleForVerificationWith(
+        requirements.totalPostsRequired,
+        requirements.engagedPostsRequired,
+        requirements.totalEngagementRequired,
+        requirements.avgLikesRequired,
+        totalEngagement: totalEngagement,
+        avgLikes: avgLikes,
+      );
+
+      if (!isEligible) {
+        return false;
+      }
+
+      // Auto-verify if not already
+      await _checkAndUnlockVerification(userId);
+      return true;
+    } catch (e) {
+      debugPrint('Error requesting verification: $e');
+      return false;
+    }
+  }
+
+  /// Create a verification announcement post
   Future<String> createVerificationAnnouncement({
     required String userId,
     required String? imageUrl,
@@ -189,7 +390,8 @@ class StreakService {
           .from('posts')
           .insert({
             'user_id': userId,
-            'content': '🎉 I\'m now a verified user on AnonPro! 🔥',
+            'content':
+                '🎉 I\'ve unlocked VERIFIED status on AnonPro! 🔥\n\nThanks to the amazing community for the support. Now I can answer questions in Q&A rooms and access exclusive features!',
             'image_url': imageUrl,
             'is_anonymous': false,
             'post_identity_mode': 'public',
@@ -199,13 +401,8 @@ class StreakService {
 
       return res['id'] as String;
     } catch (e) {
+      debugPrint('Error creating verification announcement: $e');
       rethrow;
     }
-  }
-
-  /// Get verification progress for user
-  Future<int> getVerificationProgress(String userId) async {
-    final streak = await getStreak(userId);
-    return streak?.verificationProgress ?? 0;
   }
 }

@@ -6,6 +6,10 @@ class UserModel {
   final String? bio;
   final String? profileImageUrl;
   final String? coverImageUrl;
+  final String? profileTheme;
+  final String? customEmoji;
+  final String? profileLink;
+  final String? highlightPostId;
   final String role; // 'user', 'verified', 'admin'
   final bool isBanned;
   final bool isVerified;
@@ -27,6 +31,10 @@ class UserModel {
     this.bio,
     this.profileImageUrl,
     this.coverImageUrl,
+    this.profileTheme,
+    this.customEmoji,
+    this.profileLink,
+    this.highlightPostId,
     required this.role,
     required this.isBanned,
     required this.isVerified,
@@ -51,6 +59,10 @@ class UserModel {
       bio: json['bio'] as String?,
       profileImageUrl: json['profile_image_url'] as String?,
       coverImageUrl: json['cover_image_url'] as String?,
+      profileTheme: json['profile_theme'] as String?,
+      customEmoji: json['custom_emoji'] as String?,
+      profileLink: json['profile_link'] as String?,
+      highlightPostId: json['highlight_post_id'] as String?,
       role: json['role'] as String? ?? 'user',
       isBanned: json['is_banned'] as bool? ?? false,
       isVerified: json['is_verified'] as bool? ?? false,
@@ -82,6 +94,10 @@ class UserModel {
       'bio': bio,
       'profile_image_url': profileImageUrl,
       'cover_image_url': coverImageUrl,
+      'profile_theme': profileTheme,
+      'custom_emoji': customEmoji,
+      'profile_link': profileLink,
+      'highlight_post_id': highlightPostId,
       'role': role,
       'is_banned': isBanned,
       'is_verified': isVerified,
@@ -105,6 +121,10 @@ class UserModel {
     String? bio,
     String? profileImageUrl,
     String? coverImageUrl,
+    String? profileTheme,
+    String? customEmoji,
+    String? profileLink,
+    String? highlightPostId,
     String? role,
     bool? isBanned,
     bool? isVerified,
@@ -126,6 +146,10 @@ class UserModel {
       bio: bio ?? this.bio,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
+      profileTheme: profileTheme ?? this.profileTheme,
+      customEmoji: customEmoji ?? this.customEmoji,
+      profileLink: profileLink ?? this.profileLink,
+      highlightPostId: highlightPostId ?? this.highlightPostId,
       role: role ?? this.role,
       isBanned: isBanned ?? this.isBanned,
       isVerified: isVerified ?? this.isVerified,

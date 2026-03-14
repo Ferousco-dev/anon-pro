@@ -1,0 +1,100 @@
+{
+  "safety_and_community_guidelines": {
+    "anonymous_safety": "All anonymous posts protect user identity. IP addresses and metadata are not visible to other users.",
+    "content_moderation": "Admin team reviews reported content. Users can report spam, harassment, or inappropriate content.",
+    "block_and_report": "Users can block other users or report them for harassment, spam, or policy violations.",
+    "data_privacy": "All user data is stored securely on Supabase. Credentials are never stored locally.",
+    "prohibited_content": "Hate speech, explicit content, personal doxxing, and threats are prohibited and will result in bans.",
+    "ban_policy": "Users violating community guidelines will be banned. Repeated violations lead to permanent bans."
+  },
+  "anonymity_and_privacy_advanced": {
+    "how_anonymity_works": "Posts marked 'Anonymous' show no identifying information. Real identity completely hidden from other users.",
+    "anonymous_benefits": [
+      "Express freely without judgment",
+      "Share vulnerable thoughts safely",
+      "Explore identity without pressure",
+      "Protect personal reputation",
+      "Safe space for confessions"
+    ],
+    "privacy_controls_detailed": {
+      "dm_privacy": "Control who can message you: Everyone, Verified Only, or Followers Only",
+      "qa_settings": "Turn Q&A feature on/off to control if followers can ask you questions",
+      "profile_visibility": "Control what information is public on your profile",
+      "block_users": "Block specific users to prevent interaction"
+    },
+    "what_we_protect": [
+      "IP addresses not logged",
+      "Location data not collected",
+      "Metadata not visible to users",
+      "Email not shared",
+      "Real phone never exposed"
+    ],
+    "what_admins_can_see": "Admins see only what's necessary for moderation: content, reported issues, account status. Not personal info."
+  },
+  "moderation_and_safety_detailed": {
+    "reporting_content": "Tap report button on any post/comment to flag inappropriate content. Admins review all reports.",
+    "report_reasons": [
+      "Spam",
+      "Harassment/Bullying",
+      "Hate speech",
+      "Sexual/Explicit content",
+      "Violence/Threats",
+      "Doxxing/Personal info",
+      "Other"
+    ],
+    "blocking_users": "Block users to prevent them from messaging you or seeing your profile.",
+    "what_gets_banned": [
+      "Hate speech",
+      "Harassment/threats",
+      "Sexual exploitation",
+      "Spam/scams",
+      "Personal doxxing",
+      "Repeated policy violations"
+    ],
+    "ban_process": "First violation = warning. Repeated violations = temporary ban. Severe/repeated = permanent ban.",
+    "appeal_process": "If wrongly banned, contact support with explanation. Admins review appeal.",
+    "community_trust": "Report suspicious activity. Help keep AnonPro safe and welcoming for everyone."
+  },
+  "moderation_system": {
+    "reporting_process": "Users can report posts, comments, or profiles that violate community guidelines.",
+    "review_flow": [
+      "User submits report",
+      "Moderation team reviews the report",
+      "Action may include warning, content removal, or banning"
+    ],
+    "automatic_filters": [
+      "Spam detection",
+      "Harassment detection",
+      "Duplicate content filtering"
+    ]
+  },
+  "blocking_system": {
+    "how_blocking_works": "When you block a user, they cannot send you messages, view your profile details, or interact with your content.",
+    "how_to_block": "Open the user's profile, tap the menu, and select 'Block User'.",
+    "unblock": "You can unblock users in Settings > Blocked Users."
+  },
+  "reporting_content": {
+    "report_types": [
+      "Spam",
+      "Harassment",
+      "Hate speech",
+      "Explicit content",
+      "Impersonation"
+    ],
+    "report_steps": [
+      "Tap the menu on the post or profile",
+      "Select 'Report'",
+      "Choose the reason",
+      "Submit the report"
+    ]
+  },
+  "privacy_features": {
+    "identity_protection": "AnonPro protects user identity when posting anonymously.",
+    "privacy_controls": [
+      "Control who can message you",
+      "Block unwanted users",
+      "Hide profile details"
+    ],
+    "anonymous_posts": "Anonymous posts do not reveal your username to other users."
+  }
+}

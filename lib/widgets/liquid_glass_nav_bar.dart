@@ -198,12 +198,12 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
 
   Widget _buildFloatingBubble() {
     final itemWidth = _getItemWidth();
-    final bubbleSize = 56.0;
+    final bubbleWidth = itemWidth - 12;
+    final bubbleHeight = 52.0;
     final bubbleX =
-        _slideAnimation.value * itemWidth + (itemWidth - bubbleSize) / 2;
-    final bubbleY = -14.0; // Floats above the navbar
+        _slideAnimation.value * itemWidth + (itemWidth - bubbleWidth) / 2;
+    final bubbleY = 8.0;
 
-    final glowIntensity = 0.12 + (_glowAnimation.value * 0.08);
     final scale = _scaleAnimation.value;
 
     return Positioned(
@@ -211,59 +211,55 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
       top: bubbleY,
       child: Transform.scale(
         scale: scale,
-        child: Container(
-          width: bubbleSize,
-          height: bubbleSize,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.08),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.25 + (_glowAnimation.value * 0.1)),
-              width: 1.2,
-            ),
-            gradient: RadialGradient(
-              center: const Alignment(-0.3, -0.4),
-              radius: 1.0,
-              colors: [
-                Colors.white.withOpacity(0.18),
-                Colors.white.withOpacity(0.06),
-                Colors.white.withOpacity(0.02),
-              ],
-              stops: const [0.0, 0.5, 1.0],
-            ),
-            boxShadow: [
-              // Outer glow
-              BoxShadow(
-                color: Colors.white.withOpacity(glowIntensity),
-                blurRadius: 24,
-                spreadRadius: 2,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              width: bubbleWidth,
+              height: bubbleHeight,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                color: Colors.white.withOpacity(0.10),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.26),
+                  width: 1.0,
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.20),
+                    Colors.white.withOpacity(0.04),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.12),
+                    blurRadius: 10,
+                    spreadRadius: -2,
+                  ),
+                ],
               ),
-              // Soft under-shadow
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-              // Inner highlight glow
-              BoxShadow(
-                color: const Color(0xFF007AFF).withOpacity(0.08 + (_glowAnimation.value * 0.06)),
-                blurRadius: 16,
-                spreadRadius: -2,
-              ),
-            ],
-          ),
-          child: ClipOval(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withOpacity(0.15),
-                      Colors.white.withOpacity(0.0),
+              child: Align(
+                alignment: const Alignment(0.7, -0.7),
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF34C759),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF34C759).withOpacity(0.6),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
                     ],
                   ),
                 ),
@@ -299,7 +295,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
     final iconOpacity = isSelected ? 1.0 : 0.4 + (proximity * 0.2);
 
     // Vertical lift for the selected item (floats into the bubble)
-    final verticalOffset = isSelected ? -12.0 * _scaleAnimation.value : 0.0;
+    final verticalOffset = isSelected ? -6.0 * _scaleAnimation.value : 0.0;
 
     final tapScale = isSelected ? _tapAnimation.value : 1.0;
 

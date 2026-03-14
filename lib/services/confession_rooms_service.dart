@@ -18,6 +18,9 @@ class ConfessionRoomsService {
     required String creatorId,
     required String roomName,
     required int durationMinutes,
+    String? rules,
+    String? pinnedMessage,
+    DateTime? scheduledStartAt,
   }) async {
     try {
       final expiresAt = DateTime.now().add(Duration(minutes: durationMinutes));
@@ -31,6 +34,9 @@ class ConfessionRoomsService {
             'room_name': roomName,
             'expires_at': expiresAt.toIso8601String(),
             'join_code': joinCode,
+            'rules': rules,
+            'pinned_message': pinnedMessage,
+            'scheduled_start_at': scheduledStartAt?.toIso8601String(),
           })
           .select()
           .single();
@@ -90,6 +96,22 @@ class ConfessionRoomsService {
           .from('confession_rooms')
           .select('*')
           .eq('creator_id', creatorId)
+          .eq('is_active', true)
+          .gt('expires_at', DateTime.now().toIso8601String())
+          .order('created_at', ascending: false);
+
+      return (res as List).map((r) => ConfessionRoomModel.fromJson(r)).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Get all active rooms
+  Future<List<ConfessionRoomModel>> getActiveRooms() async {
+    try {
+      final res = await _supabase
+          .from('confession_rooms')
+          .select('*')
           .eq('is_active', true)
           .gt('expires_at', DateTime.now().toIso8601String())
           .order('created_at', ascending: false);

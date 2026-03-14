@@ -5,6 +5,9 @@ class ConfessionRoomModel {
   final String? description;
   final int maxParticipants;
   final String? joinCode;
+  final String? rules;
+  final String? pinnedMessage;
+  final DateTime? scheduledStartAt;
   final DateTime expiresAt;
   final bool isActive;
   final DateTime createdAt;
@@ -15,6 +18,9 @@ class ConfessionRoomModel {
     required this.roomName,
     this.description,
     this.joinCode,
+    this.rules,
+    this.pinnedMessage,
+    this.scheduledStartAt,
     this.maxParticipants = 50,
     required this.expiresAt,
     this.isActive = true,
@@ -28,6 +34,11 @@ class ConfessionRoomModel {
       roomName: json['room_name'] as String,
       description: json['description'] as String?,
       joinCode: json['join_code'] as String?,
+      rules: json['rules'] as String?,
+      pinnedMessage: json['pinned_message'] as String?,
+      scheduledStartAt: json['scheduled_start_at'] != null
+          ? DateTime.parse(json['scheduled_start_at'] as String)
+          : null,
       maxParticipants: json['max_participants'] as int? ?? 50,
       expiresAt: DateTime.parse(json['expires_at'] as String),
       isActive: json['is_active'] as bool? ?? true,
@@ -42,6 +53,9 @@ class ConfessionRoomModel {
       'room_name': roomName,
       'description': description,
       'join_code': joinCode,
+      'rules': rules,
+      'pinned_message': pinnedMessage,
+      'scheduled_start_at': scheduledStartAt?.toIso8601String(),
       'max_participants': maxParticipants,
       'expires_at': expiresAt.toIso8601String(),
       'is_active': isActive,

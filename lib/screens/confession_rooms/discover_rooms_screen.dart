@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 import '../../models/confession_room_model.dart';
 import '../../utils/constants.dart';
 import 'confession_rooms_screen.dart';
@@ -117,6 +118,25 @@ class _DiscoverRoomsScreenState extends State<DiscoverRoomsScreen> {
     }
   }
 
+  String _getStartLabel(DateTime? startsAt) {
+    if (startsAt == null) return '';
+    final diff = startsAt.difference(DateTime.now());
+    if (diff.isNegative) return '';
+    final minutes = diff.inMinutes;
+    return 'Starts in ${minutes}m';
+  }
+
+  void _copyJoinCode(String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Join code copied'),
+        backgroundColor: AppConstants.primaryBlue,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -170,6 +190,11 @@ class _DiscoverRoomsScreenState extends State<DiscoverRoomsScreen> {
                       final room = _rooms[index];
                       final timeRemaining = _getTimeRemaining(room.expiresAt);
                       final isExpired = room.isExpired;
+                      final hasStarted = room.scheduledStartAt == null ||
+                          room.scheduledStartAt!
+                              .isBefore(DateTime.now());
+                      final startLabel =
+                          _getStartLabel(room.scheduledStartAt);
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -233,7 +258,9 @@ class _DiscoverRoomsScreenState extends State<DiscoverRoomsScreen> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    timeRemaining,
+                                    startLabel.isNotEmpty
+                                        ? startLabel
+                                        : timeRemaining,
                                     style: TextStyle(
                                       color: isExpired
                                           ? AppConstants.red
@@ -244,22 +271,58 @@ class _DiscoverRoomsScreenState extends State<DiscoverRoomsScreen> {
                                   ),
                                 ],
                               ),
+                              if ((room.joinCode ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Join code: ',
+                                      style: TextStyle(
+                                        color: AppConstants.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    Text(
+                                      room.joinCode!,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.copy_rounded,
+                                        size: 16,
+                                        color: AppConstants.primaryBlue,
+                                      ),
+                                      onPressed: () =>
+                                          _copyJoinCode(room.joinCode!),
+                                      tooltip: 'Copy code',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                           trailing: !isExpired
                               ? ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (ctx) =>
-                                            ConfessionRoomChatScreen(
-                                          roomId: room.id,
-                                          roomName: room.roomName,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                  onPressed: hasStarted
+                                      ? () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (ctx) =>
+                                                  ConfessionRoomChatScreen(
+                                                roomId: room.id,
+                                                roomName: room.roomName,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      : null,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppConstants.primaryBlue,
                                     foregroundColor: Colors.white,
@@ -268,7 +331,9 @@ class _DiscoverRoomsScreenState extends State<DiscoverRoomsScreen> {
                                       vertical: 8,
                                     ),
                                   ),
-                                  child: const Text('Join'),
+                                  child: Text(
+                                    hasStarted ? 'Join' : 'Starts Soon',
+                                  ),
                                 )
                               : Container(
                                   padding: const EdgeInsets.symmetric(

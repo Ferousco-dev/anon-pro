@@ -56,6 +56,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _subscribeToReactions();
     _markMessagesAsRead();
     if (_chat.isGroup) {
+      _loadConversationInfo();
       _loadGroupMembers();
       _subscribeToGroupChanges();
     }
@@ -130,6 +131,34 @@ class _ConversationScreenState extends State<ConversationScreen> {
       }
     } catch (e) {
       debugPrint('Error loading group members: $e');
+    }
+  }
+
+  Future<void> _loadConversationInfo() async {
+    try {
+      final response = await supabase
+          .from('conversations')
+          .select(
+              'name, is_locked, group_image_url, pinned_message, pinned_by, pinned_at')
+          .eq('id', _chat.id)
+          .maybeSingle();
+      if (response == null) return;
+      if (mounted) {
+        setState(() {
+          _chat = _chat.copyWith(
+            name: response['name'] as String?,
+            isLocked: response['is_locked'] as bool? ?? _chat.isLocked,
+            groupImageUrl: response['group_image_url'] as String?,
+            pinnedMessage: response['pinned_message'] as String?,
+            pinnedBy: response['pinned_by'] as String?,
+            pinnedAt: response['pinned_at'] != null
+                ? DateTime.tryParse(response['pinned_at'] as String)
+                : _chat.pinnedAt,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load conversation info: $e');
     }
   }
 
@@ -335,6 +364,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   name: updated['name'] as String?,
                   isLocked: updated['is_locked'] as bool? ?? _chat.isLocked,
                   groupImageUrl: updated['group_image_url'] as String?,
+                  pinnedMessage: updated['pinned_message'] as String?,
+                  pinnedBy: updated['pinned_by'] as String?,
+                  pinnedAt: updated['pinned_at'] != null
+                      ? DateTime.tryParse(updated['pinned_at'] as String)
+                      : _chat.pinnedAt,
                 );
               });
             }
@@ -1343,6 +1377,28 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ),
       body: Column(
         children: [
+          if (_chat.isGroup &&
+              _chat.pinnedMessage != null &&
+              _chat.pinnedMessage!.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: AppConstants.darkGray,
+              child: Row(
+                children: [
+                  const Icon(Icons.push_pin,
+                      color: AppConstants.primaryBlue, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _chat.pinnedMessage!,
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(child: _buildMessagesList()),
           _buildMessageInput(),
         ],

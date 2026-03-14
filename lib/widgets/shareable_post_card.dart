@@ -80,7 +80,7 @@ class ShareablePostCard extends StatelessWidget {
               ),
             ),
           ),
-          // Bottom: Branding
+          // Bottom: Branding + CTA
           Padding(
             padding: const EdgeInsets.only(bottom: 24),
             child: Column(
@@ -92,7 +92,7 @@ class ShareablePostCard extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 12),
                 ),
                 Text(
-                  'ORACLES',
+                  'ANON PRO ORACLES',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 12,

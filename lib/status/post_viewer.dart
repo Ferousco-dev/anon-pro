@@ -179,6 +179,34 @@ class _PostViewerState extends State<PostViewer> with TickerProviderStateMixin {
     });
   }
 
+  Future<void> _sendReaction(String emoji) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) return;
+    try {
+      await Supabase.instance.client.from('status_reactions').upsert({
+        'status_id': widget.controller.currentPost.id,
+        'user_id': currentUser.id,
+        'emoji': emoji,
+      });
+    } catch (e) {
+      debugPrint('Failed to react to story: $e');
+    }
+  }
+
+  Future<void> _hideCurrentStory() async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) return;
+    try {
+      await Supabase.instance.client.from('user_hidden_statuses').insert({
+        'status_id': widget.controller.currentPost.id,
+        'user_id': currentUser.id,
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('Failed to hide story: $e');
+    }
+  }
+
   void _onHorizontalDragEnd(DragEndDetails details) {
     if (details.velocity.pixelsPerSecond.dx > 300 &&
         widget.controller.currentPostIndex == 0) {
@@ -448,6 +476,57 @@ class _PostViewerState extends State<PostViewer> with TickerProviderStateMixin {
                       color: AppConstants.red, size: 20),
                 ),
               ),
+            if (!widget.controller.isOwner) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () async {
+                  final action = await showModalBottomSheet<String>(
+                    context: context,
+                    backgroundColor: AppConstants.darkGray,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    builder: (context) {
+                      return SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.hide_source,
+                                  color: Colors.white),
+                              title: const Text('Hide this story',
+                                  style: TextStyle(color: Colors.white)),
+                              onTap: () => Navigator.pop(context, 'hide'),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.close,
+                                  color: Colors.white70),
+                              title: const Text('Cancel',
+                                  style: TextStyle(color: Colors.white70)),
+                              onTap: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                  if (action == 'hide') {
+                    await _hideCurrentStory();
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.more_vert,
+                      color: Colors.white, size: 20),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -472,6 +551,7 @@ class _PostViewerState extends State<PostViewer> with TickerProviderStateMixin {
                   onTap: () {
                     HapticFeedback.lightImpact();
                     _showFloatingReaction(emoji);
+                    _sendReaction(emoji);
                   },
                   child: Text(emoji, style: const TextStyle(fontSize: 28)),
                 ))

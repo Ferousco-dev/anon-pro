@@ -148,6 +148,7 @@ class _AnonymousQuestionsScreenState extends State<AnonymousQuestionsScreen> {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppConstants.primaryBlue,
+                foregroundColor: Colors.white,
               ),
               child: const Text('Post Answer'),
             ),
@@ -259,6 +260,7 @@ class _AnonymousQuestionsScreenState extends State<AnonymousQuestionsScreen> {
                                 label: const Text('Answer'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppConstants.primaryBlue,
+                                  foregroundColor: Colors.white,
                                 ),
                               ),
                           ],

@@ -20,6 +20,11 @@ class PostModel {
   final String postType; // 'regular', 'confession_room'
   final String?
       relatedConfessionRoomId; // Room ID if this is a confession room post
+  final String? postCategory;
+  final List<String> customTags;
+  final DateTime? scheduledAt;
+  final DateTime? expiresAt;
+  final bool isTemporary;
 
   UserModel? user;
   bool? isLikedByCurrentUser;
@@ -53,6 +58,11 @@ class PostModel {
     this.taggedUsers,
     this.postType = 'regular',
     this.relatedConfessionRoomId,
+    this.postCategory,
+    this.customTags = const [],
+    this.scheduledAt,
+    this.expiresAt,
+    this.isTemporary = false,
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json) {
@@ -84,7 +94,30 @@ class PostModel {
       taggedUsers: null, // Loaded separately from post_tags
       postType: json['post_type'] as String? ?? 'regular',
       relatedConfessionRoomId: json['related_confession_room_id'] as String?,
+      postCategory: json['post_category'] as String?,
+      customTags: _parseCustomTags(json['post_custom_tags']),
+      scheduledAt: json['scheduled_at'] != null
+          ? DateTime.parse(json['scheduled_at'] as String)
+          : null,
+      expiresAt: json['expires_at'] != null
+          ? DateTime.parse(json['expires_at'] as String)
+          : null,
+      isTemporary: json['is_temporary'] as bool? ?? false,
     );
+  }
+
+  static List<String> _parseCustomTags(dynamic value) {
+    if (value is List) {
+      return value.map((v) => v.toString()).where((v) => v.isNotEmpty).toList();
+    }
+    if (value is String) {
+      return value
+          .split(',')
+          .map((v) => v.trim())
+          .where((v) => v.isNotEmpty)
+          .toList();
+    }
+    return const [];
   }
 
   Map<String, dynamic> toJson() {
@@ -106,6 +139,11 @@ class PostModel {
       'original_content': originalContent,
       'post_type': postType,
       'related_confession_room_id': relatedConfessionRoomId,
+      'post_category': postCategory,
+      'post_custom_tags': customTags.join(','),
+      'scheduled_at': scheduledAt?.toIso8601String(),
+      'expires_at': expiresAt?.toIso8601String(),
+      'is_temporary': isTemporary,
     };
   }
 
@@ -133,6 +171,11 @@ class PostModel {
     Map<String, String>? taggedUsers,
     String? postType,
     String? relatedConfessionRoomId,
+    String? postCategory,
+    List<String>? customTags,
+    DateTime? scheduledAt,
+    DateTime? expiresAt,
+    bool? isTemporary,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -161,6 +204,11 @@ class PostModel {
       postType: postType ?? this.postType,
       relatedConfessionRoomId:
           relatedConfessionRoomId ?? this.relatedConfessionRoomId,
+      postCategory: postCategory ?? this.postCategory,
+      customTags: customTags ?? this.customTags,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      isTemporary: isTemporary ?? this.isTemporary,
     );
   }
 

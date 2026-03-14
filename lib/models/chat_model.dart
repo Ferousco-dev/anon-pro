@@ -19,6 +19,9 @@ class ChatModel {
   final bool isLocked;
   final String? createdBy;
   final String? currentUserRole; // 'admin' or 'member'
+  final String? pinnedMessage;
+  final String? pinnedBy;
+  final DateTime? pinnedAt;
 
   ChatModel({
     required this.id,
@@ -39,6 +42,9 @@ class ChatModel {
     this.isLocked = false,
     this.createdBy,
     this.currentUserRole,
+    this.pinnedMessage,
+    this.pinnedBy,
+    this.pinnedAt,
   });
 
   factory ChatModel.fromJson(Map<String, dynamic> json) {
@@ -65,6 +71,11 @@ class ChatModel {
       isLocked: json['is_locked'] as bool? ?? false,
       createdBy: json['created_by'] as String?,
       currentUserRole: json['current_user_role'] as String?,
+      pinnedMessage: json['pinned_message'] as String?,
+      pinnedBy: json['pinned_by'] as String?,
+      pinnedAt: json['pinned_at'] != null
+          ? DateTime.tryParse(json['pinned_at'] as String)
+          : null,
     );
   }
 
@@ -88,6 +99,9 @@ class ChatModel {
       'is_locked': isLocked,
       'created_by': createdBy,
       'current_user_role': currentUserRole,
+      'pinned_message': pinnedMessage,
+      'pinned_by': pinnedBy,
+      'pinned_at': pinnedAt?.toIso8601String(),
     };
   }
 
@@ -110,6 +124,9 @@ class ChatModel {
     bool? isLocked,
     String? createdBy,
     String? currentUserRole,
+    String? pinnedMessage,
+    String? pinnedBy,
+    DateTime? pinnedAt,
   }) {
     return ChatModel(
       id: id ?? this.id,
@@ -131,6 +148,9 @@ class ChatModel {
       isLocked: isLocked ?? this.isLocked,
       createdBy: createdBy ?? this.createdBy,
       currentUserRole: currentUserRole ?? this.currentUserRole,
+      pinnedMessage: pinnedMessage ?? this.pinnedMessage,
+      pinnedBy: pinnedBy ?? this.pinnedBy,
+      pinnedAt: pinnedAt ?? this.pinnedAt,
     );
   }
 

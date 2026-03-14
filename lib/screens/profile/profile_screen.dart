@@ -15,11 +15,8 @@ import 'profile_dm_launcher.dart';
 import '../../models/user_analytics_model.dart';
 import '../../services/feed_cache_service.dart';
 import 'followers_list_screen.dart';
-import '../../screens/qa/anonymous_questions_screen.dart';
-import '../../screens/qa/qa_answers_inbox_screen.dart';
-import '../../screens/confession_rooms/confession_rooms_screen.dart';
-import '../../screens/profile/streak_progress_screen.dart';
 import '../../widgets/ask_anything_button.dart';
+import 'profile_menu_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -42,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoadingFollowStatus = false;
   // Separate flag just for profile-image upload — shows spinner ring on avatar
   bool _isUploadingProfileImage = false;
+  bool _isUploadingCoverImage = false;
 
   RealtimeChannel? _channel;
   final FeedCacheService _cache = FeedCacheService();
@@ -193,6 +191,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
+      final nowIso = DateTime.now().toIso8601String();
       final userData = await supabase
           .from('users')
           .select()
@@ -207,6 +206,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .select('*')
             .eq('user_id', widget.userId)
             .eq('is_anonymous', false)
+            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+            .or('expires_at.is.null,expires_at.gt.$nowIso')
             .order('created_at', ascending: false)
             .limit(50);
       } catch (e) {
@@ -215,6 +216,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .from('posts')
             .select('*')
             .eq('user_id', widget.userId)
+            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+            .or('expires_at.is.null,expires_at.gt.$nowIso')
             .order('created_at', ascending: false)
             .limit(50);
       }
@@ -481,123 +484,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 textStyle: TextStyle(color: Colors.white),
                               ),
                             ),
-                            child: PopupMenuButton<int>(
-                              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 24),
-                              offset: const Offset(0, 48),
-                              onSelected: (value) {
-                                if (value == 0) {
+                            child: IconButton(
+                              icon: const Icon(Icons.more_vert,
+                                  color: Colors.white, size: 24),
+                              onPressed: () {
+                                if (_user != null) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (ctx) => AnonymousQuestionsScreen(
-                                        userId: _user!.id,
-                                        isOwner: true,
-                                      ),
-                                    ),
-                                  );
-                                } else if (value == 1) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (ctx) => ConfessionRoomsScreen(
+                                      builder: (ctx) => ProfileMenuScreen(
                                         userId: _user!.id,
                                       ),
                                     ),
                                   );
-                                } else if (value == 2) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (ctx) => StreakProgressScreen(
-                                        userId: _user!.id,
-                                      ),
-                                    ),
-                                  );
-                                } else if (value == 3) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (ctx) => QAAnswersInboxScreen(
-                                        userId: _user!.id,
-                                      ),
-                                    ),
-                                  );
-                                } else if (value == 4) {
-                                  _reportUser();
                                 }
                               },
-                              itemBuilder: (context) => [
-                                if (_isOwnProfile && (_user?.isVerified ?? false))
-                                  const PopupMenuItem(
-                                    value: 0,
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.help_outline_rounded, color: Colors.white, size: 20),
-                                        SizedBox(width: 12),
-                                        Text('Q&A'),
-                                      ],
-                                    ),
-                                  ),
-                                if (_isOwnProfile && (_user?.isVerified ?? false))
-                                  const PopupMenuItem(
-                                    value: 1,
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
-                                        SizedBox(width: 12),
-                                        Text('Rooms'),
-                                      ],
-                                    ),
-                                  ),
-                                if (_isOwnProfile)
-                                  const PopupMenuItem(
-                                    value: 2,
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 20),
-                                        SizedBox(width: 12),
-                                        Text('Streak'),
-                                      ],
-                                    ),
-                                  ),
-                                if (_isOwnProfile)
-                                  const PopupMenuItem(
-                                    value: 3,
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.mail_outline_rounded, color: Colors.white, size: 20),
-                                        SizedBox(width: 12),
-                                        Text('Inbox'),
-                                      ],
-                                    ),
-                                  ),
-                                if (!_isOwnProfile)
-                                  const PopupMenuItem(
-                                    value: 4,
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.report_problem_outlined, color: Colors.white, size: 20),
-                                        SizedBox(width: 12),
-                                        Text('Report User'),
-                                      ],
-                                    ),
-                                  ),
-                              ],
                             ),
                           ),
                         ],
                         flexibleSpace: FlexibleSpaceBar(
-                          background: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  AppConstants.primaryBlue.withOpacity(0.25),
-                                  AppConstants.black,
-                                ],
+                          background: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if ((_user?.coverImageUrl ?? '').isNotEmpty)
+                                Image.network(
+                                  _user!.coverImageUrl!,
+                                  fit: BoxFit.cover,
+                                )
+                              else
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        _profileAccentColor(
+                                                _user?.profileTheme)
+                                            .withOpacity(0.3),
+                                        AppConstants.black,
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black.withOpacity(0.2),
+                                      AppConstants.black,
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),
@@ -740,6 +681,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                   ),
+                                  if ((_user!.customEmoji ?? '').isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _user!.customEmoji!,
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
+                                  ],
                                   if (_user!.isVerifiedUser) ...[
                                     const SizedBox(width: 4),
                                     Icon(
@@ -779,6 +727,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
                               ],
+
+                              if ((_user!.profileLink ?? '').isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    _user!.profileLink!,
+                                    style: const TextStyle(
+                                      color: AppConstants.primaryBlue,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  'Member since ${_formatMemberSince(_user!.createdAt)}',
+                                  style: const TextStyle(
+                                    color: AppConstants.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
 
                               // Banned badge
                               if (_user!.isBanned)
@@ -972,18 +944,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 14),
-                            child: Text(
-                              'Posts',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.3,
-                              ),
+                            child: Row(
+                              children: [
+                                const Text(
+                                  'Posts',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (_isOwnProfile && _user!.isVerifiedUser)
+                                  TextButton(
+                                    onPressed: _showHighlightPostPicker,
+                                    child: const Text('Highlight Post'),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
                       ),
+
+                      if ((_user!.highlightPostId ?? '').isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: _buildHighlightedPost(),
+                        ),
 
                       // ── Posts list ──
                       if (_posts.isEmpty)
@@ -1349,6 +1336,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         TextEditingController(text: _user!.displayName ?? '');
     final aliasController = TextEditingController(text: _user!.alias);
     final bioController = TextEditingController(text: _user!.bio ?? '');
+    final linkController =
+        TextEditingController(text: _user!.profileLink ?? '');
+    String dmPrivacy = _user!.dmPrivacy;
+    final emojiController =
+        TextEditingController(text: _user!.customEmoji ?? '');
+    final themeOptions = ['blue', 'gold', 'green', 'red', 'teal'];
+    String selectedTheme = _user!.profileTheme ?? 'blue';
 
     showModalBottomSheet(
       context: context,
@@ -1401,6 +1395,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ],
                         ),
+                        if (_user!.isVerifiedUser)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed:
+                                  _isSaving || _isUploadingCoverImage
+                                      ? null
+                                      : () async {
+                                          await _pickAndUploadCoverImage();
+                                        },
+                              child: _isUploadingCoverImage
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                                AppConstants.primaryBlue),
+                                      ),
+                                    )
+                                  : const Text('Change Banner'),
+                            ),
+                          ),
                         const SizedBox(height: 12),
                         _buildTextField('Full name', displayNameController,
                             maxLength: 40),
@@ -1408,8 +1426,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildTextField('Username', aliasController,
                             maxLength: 20, prefixText: '@'),
                         const SizedBox(height: 12),
-                        _buildTextField('Bio', bioController,
-                            maxLength: AppConstants.maxBioLength, maxLines: 4),
+                          _buildTextField('Bio', bioController,
+                              maxLength: AppConstants.maxBioLength, maxLines: 4),
+                        if (_user!.isVerifiedUser) ...[
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            'Profile link',
+                            linkController,
+                            maxLength: 120,
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'DM Privacy',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: dmPrivacy,
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'everyone',
+                                child: Text('Everyone'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'verified_only',
+                                child: Text('Verified users only'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'followers_only',
+                                child: Text('Followers only'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              dmPrivacy = value;
+                            },
+                            dropdownColor: AppConstants.darkGray,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: AppConstants.mediumGray,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[800]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[800]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: AppConstants.primaryBlue),
+                              ),
+                            ),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ],
+                        if (_user!.isVerifiedUser) ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Verified Customization',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            'Custom emoji',
+                            emojiController,
+                            maxLength: 2,
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Profile theme',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedTheme,
+                            items: themeOptions
+                                .map(
+                                  (t) => DropdownMenuItem(
+                                    value: t,
+                                    child: Text(
+                                      t.toUpperCase(),
+                                      style:
+                                          const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              selectedTheme = value;
+                            },
+                            dropdownColor: AppConstants.darkGray,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: AppConstants.mediumGray,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[800]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    BorderSide(color: Colors.grey[800]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: AppConstants.primaryBlue),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
@@ -1455,6 +1596,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       displayName:
                                           newName.isEmpty ? null : newName,
                                       bio: newBio.isEmpty ? null : newBio,
+                                      profileTheme: _user!.isVerifiedUser
+                                          ? selectedTheme
+                                          : null,
+                                      customEmoji: _user!.isVerifiedUser
+                                          ? emojiController.text.trim()
+                                          : null,
+                                      profileLink: _user!.isVerifiedUser
+                                          ? linkController.text.trim()
+                                          : null,
+                                      dmPrivacy:
+                                          _user!.isVerifiedUser ? dmPrivacy : null,
                                     );
 
                                     if (mounted) {
@@ -1540,6 +1692,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String alias,
     String? displayName,
     String? bio,
+    String? profileTheme,
+    String? customEmoji,
+    String? profileLink,
+    String? dmPrivacy,
   }) async {
     setState(() => _isSaving = true);
 
@@ -1560,6 +1716,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         alias: alias,
         displayName: displayName,
         bio: bio,
+        profileTheme: profileTheme,
+        customEmoji: customEmoji,
+        profileLink: profileLink,
+        dmPrivacy: dmPrivacy,
       );
 
       await _loadProfile();
@@ -1687,6 +1847,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHighlightedPost() {
+    final highlightId = _user?.highlightPostId;
+    if (highlightId == null || highlightId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final post = _posts.firstWhere(
+      (p) => p.id == highlightId,
+      orElse: () => PostModel(
+        id: '',
+        userId: '',
+        content: '',
+        imageUrl: null,
+        isAnonymous: false,
+        likesCount: 0,
+        commentsCount: 0,
+        sharesCount: 0,
+        viewsCount: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        originalPostId: null,
+        repostsCount: 0,
+        originalContent: null,
+      ),
+    );
+
+    if (post.id.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Highlighted Post',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          PostCard(
+            post: post,
+            currentUser: _isOwnProfile ? _user : null,
+            onDelete: _isOwnProfile ? () => _deletePost(post) : null,
+            onEdit: _isOwnProfile && post.originalPostId == null
+                ? () => _editPost(post)
+                : null,
           ),
         ],
       ),
@@ -1917,6 +2134,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _pickAndUploadCoverImage() async {
+    if (!(_user?.isVerifiedUser ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verified users can add a banner'),
+          backgroundColor: AppConstants.primaryBlue,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1400,
+        maxHeight: 600,
+        imageQuality: 85,
+      );
+
+      if (picked == null) return;
+
+      if (mounted) setState(() => _isUploadingCoverImage = true);
+
+      final publicUrl = await ImageUploadService.uploadPostImage(
+        imageFile: File(picked.path),
+        postId: 'cover_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (publicUrl.isEmpty) {
+        throw Exception('Image upload failed');
+      }
+
+      await AuthService().updateUserProfile(coverImageUrl: publicUrl);
+      await _loadProfile();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to upload banner: $e'),
+          backgroundColor: AppConstants.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(20),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingCoverImage = false);
+      }
+    }
+  }
+
   void _showFeedbackDialog() {
     final feedbackController = TextEditingController();
 
@@ -1979,6 +2248,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  void _showHighlightPostPicker() {
+    if (!(_user?.isVerifiedUser ?? false)) return;
+    if (_posts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No posts to highlight yet'),
+          backgroundColor: AppConstants.red,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppConstants.darkGray,
+        title: const Text('Highlight a post',
+            style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _posts.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  title: const Text(
+                    'Remove highlight',
+                    style: TextStyle(color: AppConstants.textSecondary),
+                  ),
+                  onTap: () async {
+                    await AuthService().updateUserProfile(
+                      highlightPostId: '',
+                    );
+                    if (mounted) {
+                      Navigator.pop(context);
+                      _loadProfile();
+                    }
+                  },
+                );
+              }
+
+              final post = _posts[index - 1];
+              final title = post.content.trim().isEmpty
+                  ? '(Image post)'
+                  : post.content.trim();
+
+              return ListTile(
+                title: Text(
+                  title.length > 60 ? '${title.substring(0, 60)}…' : title,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  await AuthService().updateUserProfile(
+                    highlightPostId: post.id,
+                  );
+                  if (mounted) {
+                    Navigator.pop(context);
+                    _loadProfile();
+                  }
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _profileAccentColor(String? theme) {
+    switch ((theme ?? 'blue').toLowerCase()) {
+      case 'gold':
+        return const Color(0xFFFFC107);
+      case 'green':
+        return const Color(0xFF34C759);
+      case 'red':
+        return const Color(0xFFFF3B30);
+      case 'teal':
+        return const Color(0xFF5AC8FA);
+      default:
+        return AppConstants.primaryBlue;
+    }
+  }
+
+  String _formatMemberSince(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final month = months[date.month - 1];
+    return '$month ${date.year}';
   }
 
   void _reportUser() {

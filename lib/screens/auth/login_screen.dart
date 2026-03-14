@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/auth_service.dart';
 import '../../utils/constants.dart';
+import '../../services/maintenance_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Supabase client
@@ -70,16 +71,27 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (response.user != null) {
-        // Check if user is banned
+        // Check if user is banned and resolve role
         final userData = await supabase
             .from('users')
-            .select('is_banned')
+            .select('is_banned, role')
             .eq('id', response.user!.id)
             .single();
 
         if (userData['is_banned'] == true) {
           await supabase.auth.signOut();
           _showError('Your account has been banned');
+          return;
+        }
+
+        final maintenanceEnabled =
+            await MaintenanceService().isMaintenanceEnabled();
+        final isAdmin = userData['role'] == 'admin';
+        if (maintenanceEnabled && !isAdmin) {
+          await supabase.auth.signOut();
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/maintenance');
+          }
           return;
         }
 

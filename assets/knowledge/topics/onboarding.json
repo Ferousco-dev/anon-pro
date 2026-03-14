@@ -1,0 +1,209 @@
+{
+  "account_and_onboarding": {
+    "getting_started": "Download AnonPro, create account with email, set up username and avatar, start exploring!",
+    "account_creation": [
+      "Enter email and password",
+      "Create unique username/alias",
+      "Choose or upload avatar",
+      "Add bio (optional)",
+      "Choose privacy preferences"
+    ],
+    "first_steps": [
+      "Complete profile setup",
+      "Follow some users to personalize feed",
+      "Create your first post",
+      "Explore confession rooms",
+      "Send your first message",
+      "Customize privacy settings"
+    ],
+    "username_rules": "Usernames must be unique, 3-30 characters, alphanumeric + underscore/hyphen. Can be changed in settings.",
+    "avatar_and_cover": "Upload custom images or use default avatars. Cover image displays on profile. Images auto-optimized for mobile."
+  },
+  "onboarding_guidance": {
+    "welcome_message": "Welcome to AnonPro! This is a place where you can share thoughts freely and interact with others while protecting your identity.",
+    "first_steps": [
+      "Complete your profile by adding a username and avatar",
+      "Explore posts on the Home feed",
+      "Follow users whose content you enjoy",
+      "Try posting something or joining a confession room"
+    ],
+    "tips": [
+      "Be respectful to others in the community",
+      "Use anonymous mode if you want extra privacy",
+      "Report content that breaks community rules"
+    ]
+  },
+  "common_questions_natural": {
+    "quick_answers": {
+      "whats_anonpro": "AnonPro is an anonymous social platform where you can express yourself freely, build communities, and connect with others without judgment. Privacy first, community second.",
+      "is_it_really_anonymous": "Yes! Your posts can be fully anonymous. Your profile stays protected and admins only access data if policy violations occur.",
+      "how_do_i_start": "Download app, sign up with email, create username, upload avatar, and start posting or following users who interest you!",
+      "how_do_i_get_karma": "Post and comment → Get likes from users → Earn karma points. High-quality content gets more karma!",
+      "can_i_delete_my_account": "Yes, go to Settings > Account > Delete Account. Your data is permanently removed after 30 days.",
+      "what_if_i_get_banned": "Bans happen for serious policy violations. Contact support to appeal. Bans are usually preventable by following guidelines.",
+      "do_admins_see_my_posts": "Admins only view posts if reported by users or for platform security reasons. Your privacy is respected.",
+      "can_people_see_who_i_follow": "Depends on your privacy settings. You can control whether followers/following lists are public or private.",
+      "how_do_i_earn_money": "Get verified → Enable monetization → Let fans send you tips. You keep 85% of all earnings.",
+      "is_there_a_web_version": "Yes! AnonPro is available on iOS, Android, and web. Your data syncs across all devices."
+    }
+  },
+  "detailed_faq": {
+    "how_to_guides": {
+      "post_creation": {
+        "question": "How do I create a post?",
+        "answers": [
+          "Tap the + button (FAB) on the home screen to open the post composer.",
+          "You can also tap the post input field at the top of your feed.",
+          "Type your message or confession in the text field.",
+          "Choose whether to post anonymously or with your username.",
+          "Add images/media if desired.",
+          "Tap 'Post' to publish your content.",
+          "Your post will instantly appear in feeds of your followers and the public timeline."
+        ]
+      },
+      "anonymous_posting": {
+        "question": "How do I post anonymously on AnonPro?",
+        "answers": [
+          "When creating a post, toggle the 'Post Anonymously' option.",
+          "Your identity will remain completely hidden from other users.",
+          "Anonymous posts appear under the username 'Anonymous' with no profile link.",
+          "You can see your own anonymous posts in your profile, but others cannot link them to you.",
+          "Anonymous posts are perfect for confessions and sensitive topics."
+        ]
+      },
+      "messaging_someone": {
+        "question": "How do I send a direct message to someone?",
+        "answers": [
+          "Go to your Inbox tab.",
+          "Tap the search icon to find a user.",
+          "Select the user you want to message.",
+          "Type your message in the text field.",
+          "Tap send to deliver your message.",
+          "Messages are private and end-to-end encrypted.",
+          "You can send photos, videos, and other media in DMs."
+        ]
+      },
+      "managing_followers": {
+        "question": "How do I manage my followers and following?",
+        "answers": [
+          "Visit your Profile tab.",
+          "Tap on your follower count to see all followers.",
+          "You can remove followers by tapping the X button next to their name.",
+          "Go to the 'Following' tab to see who you're following.",
+          "Tap the X to unfollow users you no longer want to see in your feed.",
+          "You can view any user's follower list from their profile."
+        ]
+      },
+      "blocking_users": {
+        "question": "How do I block a user on AnonPro?",
+        "answers": [
+          "Go to the user's profile you want to block.",
+          "Tap the three-dot menu (•••) in the top right.",
+          "Select 'Block User' from the menu.",
+          "The user cannot message you, see your posts, or interact with your content.",
+          "You can unblock them anytime in your Settings > Blocked Users.",
+          "Blocked users won't know they've been blocked (for their privacy too)."
+        ]
+      },
+      "reporting_content": {
+        "question": "How do I report inappropriate content or users?",
+        "answers": [
+          "Find the post, comment, or user you want to report.",
+          "Tap the three-dot menu (•••).",
+          "Select 'Report' and choose the reason (harassment, spam, explicit content, etc).",
+          "Submit your report with any additional details.",
+          "Our moderation team reviews all reports within 24 hours.",
+          "Actions are taken based on community guidelines.",
+          "Your identity is kept anonymous when reporting."
+        ]
+      },
+      "editing_profile": {
+        "question": "How do I edit my profile and add a bio?",
+        "answers": [
+          "Go to your Profile tab (bottom right).",
+          "Tap the 'Edit Profile' button.",
+          "Update your display name, username, bio, avatar, and cover image.",
+          "You can upload a new avatar or choose from presets.",
+          "Your bio can be up to 500 characters.",
+          "Tap 'Save' to confirm your changes.",
+          "Changes appear instantly to your followers."
+        ]
+      }
+    },
+    "feature_specifics": {
+      "karma_system": {
+        "what_is_karma": "Karma is your reputation score on AnonPro. It increases when your posts and comments get likes from other users.",
+        "how_to_earn": "Post quality content → Get likes → Earn karma → Build reputation → Get verified",
+        "benefits": "Higher karma means more visibility, trust in the community, and eligibility for verification and monetization.",
+        "why_matters": "Karma shows your contribution to the community. High-karma users are influential community members."
+      },
+      "verification": {
+        "what_is_it": "Verification is a badge that proves you're a trusted, authentic community member vetted by admins.",
+        "how_to_get": "Build karma through good contributions, engage positively with the community, follow guidelines, apply for verification.",
+        "what_you_get": "Verified badge on your profile, higher visibility in searches, ability to monetize, access to exclusive features.",
+        "requirements": "Minimum karma threshold, good standing with no violations, genuine engagement for 30+ days.",
+        "timeline": "Verification requests are reviewed by admins within 5-7 business days."
+      },
+      "streaks": {
+        "what_is_it": "Streaks track how many consecutive days you've engaged with AnonPro (posting, commenting, or messaging).",
+        "how_to_maintain": "Engage on the platform daily - post, comment, or chat to maintain your streak.",
+        "rewards": "Longer streaks build reputation and show dedication to the community.",
+        "display": "Your current streak appears on your profile and encourages continued engagement."
+      },
+      "confession_rooms": {
+        "what_are_they": "Thematic chat rooms where users discuss specific topics anonymously with like-minded community members.",
+        "themes": "Relationships, career advice, health, personal growth, hobbies, and many more.",
+        "anonymity": "Everyone in a confession room is anonymous - perfect for sensitive discussions.",
+        "discovery": "Browse trending rooms from the Confession Rooms tab based on your interests.",
+        "moderation": "Admins moderate to keep rooms safe and on-topic. Harassment is not tolerated."
+      },
+      "broadcasts": {
+        "what_are_they": "One-to-many announcements you can send to all your followers at once.",
+        "use_cases": "Share important updates, news, creative content, or announcements to your entire audience instantly.",
+        "how_to_send": "Go to Broadcasts tab → Compose message/announcement → Tap Send → Delivered to all followers.",
+        "engagement": "Broadcasts help you stay connected with followers and keep them updated."
+      },
+      "ask_anything": {
+        "how_it_works": "Users can ask you anonymous questions from your profile → You answer publicly → Others see the Q&A.",
+        "privacy": "Questions are public but protect the asker's identity if they ask anonymously.",
+        "why_useful": "Build thought leadership, share expertise, engage community, understand what interests people.",
+        "control": "You can enable/disable this feature in Privacy Settings if you don't want questions."
+      }
+    },
+    "social_engagement_tips": {
+      "grow_followers": "Post consistently, engage with others' content, participate in confession rooms, ask interesting questions, be authentic.",
+      "increase_visibility": "Use trending hashtags in posts, engage with trending topics, ask thought-provoking questions, interact with established users.",
+      "build_community": "Comment thoughtfully, respond to questions, participate in discussions, support other members, share valuable insights.",
+      "engagement_hack": "Reply to comments on your posts within the first hour - this boosts visibility significantly.",
+      "content_strategy": "Mix personal shares, helpful tips, questions, and lighthearted content for balanced engagement.",
+      "timing_matters": "Post when your followers are most active - usually 6-9pm and noon times.",
+      "authenticity_wins": "People connect with real, genuine content more than polished or fake content. Be yourself."
+    },
+    "privacy_and_security": {
+      "is_truly_anonymous": "Yes! Anonymous posts don't store IP addresses visible to users. Only admins can see metadata if needed for violations.",
+      "private_messages": "DMs are encrypted end-to-end. Only you and the recipient can read messages.",
+      "data_storage": "All data encrypted on secure Supabase servers. Never shared with third parties.",
+      "password_safety": "Never share your password with anyone, including admins. AnonPro staff will never ask for passwords.",
+      "two_factor_auth": "You can enable 2FA in security settings for extra protection on your account.",
+      "session_management": "Log out from devices you don't recognize. You can view all active sessions in Settings.",
+      "privacy_settings": "Control who can DM you, see your profile, and ask you questions from Privacy Settings."
+    },
+    "monetization_guide": {
+      "verified_only": "Only verified users can monetize content.",
+      "how_to_monetize": "Get verified → Enable monetization → Accept tips/donations → Collect payments from supporters.",
+      "payment_methods": "Connect Stripe or PayPal to receive payments from fans.",
+      "tips_system": "Users can send you tips to support your content. Completely voluntary.",
+      "revenue_share": "You keep 85% of tips; 15% goes to platform maintenance.",
+      "withdrawal": "Withdraw funds to your bank account or PayPal monthly with no minimums."
+    },
+    "problem_solving": {
+      "cant_log_in": "Check email and password are correct. If forgotten, use 'Forgot Password' to reset. Clear app cache if still stuck.",
+      "posts_not_appearing": "Check if you're logged in. Ensure post saved successfully. Try refreshing feed. Check account for bans.",
+      "messages_not_sending": "Ensure strong internet connection. Check if recipient blocked you. Retry sending.",
+      "slow_app": "Clear cache in Settings. Restart the app. Check device storage. Update to latest version.",
+      "photos_not_uploading": "Check photo size isn't too large. Ensure good internet. Try different format (jpg vs png).",
+      "notifications_not_working": "Enable notifications in phone settings. Check AnonPro notification preferences. Restart app.",
+      "account_frozen": "May indicate investigation of policy violation. Contact support for details and timeline."
+    }
+  }
+}

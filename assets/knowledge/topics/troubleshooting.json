@@ -1,0 +1,62 @@
+{
+  "common_issues_and_solutions": {
+    "cant_post": "Ensure you're logged in, have internet connection, and check if account is banned. If not banned, try refreshing or restarting app.",
+    "messages_not_loading": "Check internet connection. App has offline mode—messages sync when back online.",
+    "cant_see_posts": "Posts may have been deleted or user blocked. Try refreshing feed or checking follow status.",
+    "verification_questions": "Verification is manually approved by admins. Check verification status in Profile > Check Verification Status.",
+    "account_banned": "If your account is banned, reach out through support. Bans are for policy violations.",
+    "privacy_concerns": "You can control DM privacy, block users, and report inappropriate content. Check Privacy Settings.",
+    "performance_issues": "Try clearing cache, restarting app, or checking free device storage."
+  },
+  "troubleshooting_advanced": {
+    "app_crashes": "Force close app, clear cache, reinstall if needed. Check available device storage.",
+    "sync_issues": "App auto-syncs online. Check internet connection. Toggle airplane mode to refresh.",
+    "image_upload_problems": "Ensure file is JPEG/PNG, under 10MB, good internet connection. Try uploading again.",
+    "message_delivery": "Messages queue if offline and send on reconnect. Check internet connection.",
+    "notifications_not_working": "Enable notifications in system settings and in-app settings. Check notification type preferences.",
+    "verification_delays": "Admins review submissions regularly. Verification can take 1-7 days depending on volume.",
+    "account_recovery": "Use 'Forgot Password' via email recovery. Can't access email? Contact support."
+  },
+  "troubleshooting_expanded": {
+    "technical_issues": {
+      "app_crashes": "Force close app → Clear cache in phone settings → Reinstall if needed → Check for app updates.",
+      "profile_not_loading": "Refresh → Check internet → Log out and back in → Clear app cache.",
+      "images_blurry": "Use photos 1200x1200px or larger. Lower res images appear pixelated.",
+      "video_won't_play": "Ensure video is under 100MB. Supported formats: MP4, MOV. Re-upload in supported format.",
+      "live_chat_lag": "Reduce app background processes. Check internet speed. Mobile hotspot may have latency issues. WiFi preferred."
+    },
+    "account_issues": {
+      "cant_verify_email": "Check spam folder for verification link. Request resend from login screen. Check email is correct.",
+      "password_reset_failed": "Use email you signed up with. Check spam folder. Create strong password (8+ chars, mixed case, numbers).",
+      "two_factor_stuck": "Disable 2FA in settings if you lose access. You may need to verify identity with support.",
+      "multiple_accounts": "You can have multiple accounts with different emails. Log out to switch accounts."
+    },
+    "content_issues": {
+      "post_disappeared": "May have been deleted automatically by you accidentally. Check Deleted Posts in Profile if available.",
+      "cant_edit_post": "Edits only available within 1 hour of posting for integrity reasons.",
+      "comments_disabled": "Some posts disable comments. Respect poster's preference.",
+      "media_not_showing": "Re-upload using supported formats. Check file size isn't too large."
+    }
+  },
+  "performance_optimization": {
+    "slow_loading": "If the app loads slowly, check internet connection or restart the app.",
+    "sync_delay": "Offline posts will sync automatically when internet connection returns.",
+    "cache_clear": "Clearing cache may improve performance if the app becomes slow."
+  },
+  "technical_info": {
+    "availability": "iOS, Android, and Web platforms supported.",
+    "backend": "Supabase PostgreSQL database with real-time capabilities.",
+    "authentication": "Secure Supabase Auth + Firebase for platform push notifications.",
+    "data_storage": "Local caching with offline sync support using Hive",
+    "ai_integration": "Anon AI Assistant with local knowledge base and memory system. No external AI APIs required.",
+    "real_time_features": "Direct messaging, notifications, and live updates use Supabase Realtime subscriptions."
+  },
+  "platform_support": {
+    "supported_platforms": [
+      "iOS",
+      "Android",
+      "Web"
+    ],
+    "synchronization": "Your data syncs across devices when logged into the same account."
+  }
+}

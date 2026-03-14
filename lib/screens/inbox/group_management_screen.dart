@@ -22,12 +22,15 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _imageController = TextEditingController();
+  final TextEditingController _pinnedController = TextEditingController();
 
   // Add member search
   final TextEditingController _addMemberSearchController =
       TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+  List<Map<String, dynamic>> _joinRequests = [];
+  bool _isLoadingRequests = false;
 
   String? currentUserId;
 
@@ -42,7 +45,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     currentUserId = supabase.auth.currentUser?.id;
     _nameController.text = _chat.name;
     _imageController.text = _chat.groupImageUrl ?? '';
+    _pinnedController.text = _chat.pinnedMessage ?? '';
     _loadMembers();
+    _loadJoinRequests();
     _subscribeToChanges();
   }
 
@@ -85,9 +90,15 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   name: updated['name'] as String?,
                   isLocked: updated['is_locked'] as bool? ?? _chat.isLocked,
                   groupImageUrl: updated['group_image_url'] as String?,
+                  pinnedMessage: updated['pinned_message'] as String?,
+                  pinnedBy: updated['pinned_by'] as String?,
+                  pinnedAt: updated['pinned_at'] != null
+                      ? DateTime.tryParse(updated['pinned_at'] as String)
+                      : _chat.pinnedAt,
                 );
                 _nameController.text = _chat.name;
                 _imageController.text = _chat.groupImageUrl ?? '';
+                _pinnedController.text = _chat.pinnedMessage ?? '';
               });
             }
           },
@@ -122,6 +133,35 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     } catch (e) {
       debugPrint('Error loading members: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadJoinRequests() async {
+    if (!_chat.isAdmin) return;
+    try {
+      setState(() => _isLoadingRequests = true);
+      final response =
+          await supabase.from('group_join_requests').select('''
+            id,
+            status,
+            created_at,
+            users:user_id (
+              id,
+              alias,
+              display_name,
+              profile_image_url
+            )
+          ''').eq('conversation_id', _chat.id).eq('status', 'pending');
+
+      if (mounted) {
+        setState(() {
+          _joinRequests = List<Map<String, dynamic>>.from(response as List);
+          _isLoadingRequests = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading join requests: $e');
+      if (mounted) setState(() => _isLoadingRequests = false);
     }
   }
 
@@ -170,11 +210,16 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
 
     setState(() => _isSaving = true);
     try {
+      final pinnedMessage = _pinnedController.text.trim();
       await supabase.from('conversations').update({
         'name': name,
         'group_image_url': _imageController.text.trim().isNotEmpty
             ? _imageController.text.trim()
             : null,
+        'pinned_message': pinnedMessage.isEmpty ? null : pinnedMessage,
+        'pinned_by': pinnedMessage.isEmpty ? null : currentUserId,
+        'pinned_at':
+            pinnedMessage.isEmpty ? null : DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', _chat.id);
 
@@ -298,6 +343,39 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
       // Members reload via realtime
     } catch (e) {
       _showSnack('Failed to add member: $e', isError: true);
+    }
+  }
+
+  Future<void> _approveJoinRequest(Map<String, dynamic> request) async {
+    final user = request['users'] as Map<String, dynamic>? ?? {};
+    final userId = user['id'] as String?;
+    if (userId == null) return;
+    try {
+      await supabase.from('conversation_participants').insert({
+        'conversation_id': _chat.id,
+        'user_id': userId,
+        'role': 'member',
+      });
+      await supabase
+          .from('group_join_requests')
+          .update({'status': 'approved'}).eq('id', request['id'] as String);
+      await _loadMembers();
+      await _loadJoinRequests();
+      _showSnack('Request approved', isSuccess: true);
+    } catch (e) {
+      _showSnack('Failed to approve: $e', isError: true);
+    }
+  }
+
+  Future<void> _denyJoinRequest(Map<String, dynamic> request) async {
+    try {
+      await supabase
+          .from('group_join_requests')
+          .update({'status': 'denied'}).eq('id', request['id'] as String);
+      await _loadJoinRequests();
+      _showSnack('Request denied', isSuccess: true);
+    } catch (e) {
+      _showSnack('Failed to deny: $e', isError: true);
     }
   }
 
@@ -693,6 +771,49 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppConstants.black.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppConstants.lightGray.withOpacity(0.2),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pinned message',
+                  style: TextStyle(
+                    color: AppConstants.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _chat.isAdmin
+                    ? TextField(
+                        controller: _pinnedController,
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          hintText: 'Add a pinned message for members...',
+                          hintStyle:
+                              TextStyle(color: AppConstants.textSecondary),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                      )
+                    : Text(
+                        _chat.pinnedMessage?.isNotEmpty == true
+                            ? _chat.pinnedMessage!
+                            : 'No pinned message',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+              ],
+            ),
+          ),
 
           // Admin action buttons
           if (_chat.isAdmin) ...[
@@ -974,6 +1095,92 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                   _buildGroupHeader(),
 
                   // Members section
+                  if (_chat.isAdmin) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                      child: Text(
+                        'JOIN REQUESTS',
+                        style: TextStyle(
+                          color: AppConstants.textSecondary.withOpacity(0.6),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.4,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      color: AppConstants.darkGray,
+                      child: _isLoadingRequests
+                          ? const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                    color: AppConstants.primaryBlue),
+                              ),
+                            )
+                          : _joinRequests.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                    'No pending requests',
+                                    style: TextStyle(
+                                        color: AppConstants.textSecondary),
+                                  ),
+                                )
+                              : Column(
+                                  children: _joinRequests.map((request) {
+                                    final user =
+                                        request['users'] as Map<String, dynamic>? ??
+                                            {};
+                                    final displayName =
+                                        user['display_name'] as String? ??
+                                            user['alias'] as String? ??
+                                            'Unknown';
+                                    final imageUrl =
+                                        user['profile_image_url'] as String?;
+                                    return ListTile(
+                                      leading: CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor:
+                                            AppConstants.primaryBlue,
+                                        backgroundImage: imageUrl != null
+                                            ? NetworkImage(imageUrl)
+                                            : null,
+                                        child: imageUrl == null
+                                            ? Text(
+                                                displayName
+                                                    .substring(0, 1)
+                                                    .toUpperCase(),
+                                                style: const TextStyle(
+                                                    color: Colors.white),
+                                              )
+                                            : null,
+                                      ),
+                                      title: Text(displayName,
+                                          style: const TextStyle(
+                                              color: Colors.white)),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.close,
+                                                color: Colors.redAccent),
+                                            onPressed: () =>
+                                                _denyJoinRequest(request),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.check,
+                                                color: Colors.greenAccent),
+                                            onPressed: () =>
+                                                _approveJoinRequest(request),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                    ),
+                  ],
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                     child: Row(
@@ -1040,6 +1247,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   void dispose() {
     _nameController.dispose();
     _imageController.dispose();
+    _pinnedController.dispose();
     _addMemberSearchController.dispose();
     _participantsSubscription?.unsubscribe();
     _groupSubscription?.unsubscribe();

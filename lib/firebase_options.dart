@@ -32,13 +32,13 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'your-web-api-key',
-    appId: 'your-web-app-id',
-    messagingSenderId: 'your-sender-id',
-    projectId: 'your-project-id',
-    authDomain: 'your-project-id.firebaseapp.com',
-    storageBucket: 'your-project-id.appspot.com',
-    measurementId: 'your-measurement-id',
+    apiKey: 'AIzaSyAbYibHGg14y8A8Ag7ylsgR91PmMOooyHQ',
+    appId: '1:616821146393:web:22dd80de6f4e13fad63b88',
+    messagingSenderId: '616821146393',
+    projectId: 'anon-pro',
+    authDomain: 'anon-pro.firebaseapp.com',
+    storageBucket: 'anon-pro.firebasestorage.app',
+    measurementId: 'G-H77B61HXYS',
   );
 
   static const FirebaseOptions android = FirebaseOptions(

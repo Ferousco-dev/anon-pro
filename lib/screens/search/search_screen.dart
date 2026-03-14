@@ -137,6 +137,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   Future<List<PostModel>> _searchPosts(String query) async {
     try {
+      final nowIso = DateTime.now().toIso8601String();
       final res = await supabase.from('posts').select('''
             *,
             users (
@@ -146,8 +147,12 @@ class _SearchScreenState extends State<SearchScreen>
               followers_count, following_count, posts_count,
               created_at, updated_at
             )
-          ''').ilike('content', '%$query%').order('created_at',
-          ascending: false).limit(20);
+          ''')
+          .ilike('content', '%$query%')
+          .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+          .or('expires_at.is.null,expires_at.gt.$nowIso')
+          .order('created_at', ascending: false)
+          .limit(20);
       return (res as List)
           .map((p) => PostModel.fromJson(p as Map<String, dynamic>))
           .toList();

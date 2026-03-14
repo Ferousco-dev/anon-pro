@@ -8,6 +8,10 @@ import 'feedback_screen.dart';
 import 'activity_logs_screen.dart';
 import 'manage_admins_screen.dart';
 import 'broadcast_screen.dart';
+import 'security_settings_screen.dart';
+import 'ai_knowledge_admin_screen.dart';
+import 'moderation_keywords_screen.dart';
+import 'moderation_queue_screen.dart';
 
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key});
@@ -101,6 +105,48 @@ class AdminPanelScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                     builder: (context) => const BroadcastScreen())),
+          ),
+          const SizedBox(height: 12),
+          _buildAdminCard(
+            'Security Settings',
+            'Manage admin terminal passcode',
+            Icons.security_rounded,
+            () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const SecuritySettingsScreen())),
+          ),
+          const SizedBox(height: 12),
+          _buildAdminCard(
+            'Moderation Keywords',
+            'Auto-flag content by keywords',
+            Icons.gavel_rounded,
+            () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) =>
+                        const ModerationKeywordsScreen())),
+          ),
+          const SizedBox(height: 12),
+          _buildAdminCard(
+            'Moderation Queue',
+            'Review flagged content and apply strikes',
+            Icons.report_gmailerrorred_rounded,
+            () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) =>
+                        const ModerationQueueScreen())),
+          ),
+          const SizedBox(height: 12),
+          _buildAdminCard(
+            'AI Knowledge',
+            'Add/curate AI topics and examples',
+            Icons.psychology_rounded,
+            () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const AiKnowledgeAdminScreen())),
           ),
         ],
       ),

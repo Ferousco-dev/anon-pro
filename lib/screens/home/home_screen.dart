@@ -133,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _loadPosts({bool showLoading = true}) async {
     try {
+      final nowIso = DateTime.now().toIso8601String();
       if (showLoading) {
         if (mounted) setState(() => _isLoading = true);
       }
@@ -153,6 +154,8 @@ class _HomeScreenState extends State<HomeScreen>
               )
             ''')
             .eq('is_anonymous', false)
+            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+            .or('expires_at.is.null,expires_at.gt.$nowIso')
             .order('created_at', ascending: false)
             .limit(AppConstants.postsPerPage);
       } catch (e) {
@@ -160,6 +163,8 @@ class _HomeScreenState extends State<HomeScreen>
         response = await supabase
             .from('posts')
             .select('*')
+            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+            .or('expires_at.is.null,expires_at.gt.$nowIso')
             .order('created_at', ascending: false)
             .limit(AppConstants.postsPerPage);
       }
@@ -561,11 +566,14 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildNavItem(IconData icon, String label, int index, String route) {
     final isSelected = _selectedTab == index;
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         HapticFeedback.lightImpact();
         setState(() => _selectedTab = index);
         if (route != '/home') {
-          Navigator.pushNamed(context, route);
+          await Navigator.pushNamed(context, route);
+          if (mounted) {
+            setState(() => _selectedTab = 0);
+          }
         }
       },
       behavior: HitTestBehavior.opaque,

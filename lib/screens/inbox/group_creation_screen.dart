@@ -21,6 +21,7 @@ class _GroupCreationScreenState extends State<GroupCreationScreen> {
   bool _isLoading = false;
   bool _isCreating = false;
   String? _error;
+  bool _isPrivate = false;
 
   @override
   void initState() {
@@ -101,6 +102,7 @@ class _GroupCreationScreenState extends State<GroupCreationScreen> {
           .insert({
             'name': groupName,
             'is_group': true,
+            'is_private': _isPrivate,
             'created_by': currentUser.id,
             'group_image_url': _groupImageController.text.trim().isNotEmpty
                 ? _groupImageController.text.trim()
@@ -381,6 +383,19 @@ class _GroupCreationScreenState extends State<GroupCreationScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: _isPrivate,
+                  activeColor: AppConstants.primaryBlue,
+                  onChanged: (value) {
+                    setState(() => _isPrivate = value);
+                  },
+                  title: const Text('Private group'),
+                  subtitle: const Text(
+                    'People must request to join',
+                    style: TextStyle(color: AppConstants.textSecondary),
+                  ),
+                ),
               ],
             ),
           ),

@@ -1,0 +1,85 @@
+{
+  "karma_and_reputation": {
+    "what_is_karma": "Karma is a trust score earned through community interactions. Higher karma = more respected member.",
+    "how_to_earn_karma": {
+      "get_likes": "+1 karma per like on your post/comment",
+      "receive_comments": "+2 karma per quality comment on your post",
+      "helpful_answers": "+3 karma for helpful Q&A answers",
+      "verified_status": "+10 karma boost upon verification"
+    },
+    "karma_benefits": [
+      "Higher visibility in feed",
+      "Better search ranking",
+      "Verified user eligibility",
+      "Community trust signal",
+      "Access to exclusive features"
+    ],
+    "karma_use_cases": "Admins may use karma to identify trustworthy users for moderation or special programs.",
+    "protecting_karma": "Spam, harassment, or policy violations result in karma deductions and potential bans."
+  },
+  "monetization_and_verification": {
+    "why_get_verified": "Verified users get badge, higher visibility, access to special features, and community trust.",
+    "verification_levels": {
+      "standard_verified": "Community members vetted for trustworthiness and engagement",
+      "premium_verified": "Special tier for influencers, content creators, or notable community figures"
+    },
+    "getting_verified": "Request verification in Profile > Verification. Admins review engagement, content quality, and community standing.",
+    "tips_for_verification": [
+      "Maintain high karma (1000+)",
+      "Consistent quality posts",
+      "Active engagement",
+      "Clean record (no violations)",
+      "Authentic community participation"
+    ],
+    "verified_perks": [
+      "Verified badge on profile",
+      "Higher post visibility",
+      "Monetization options",
+      "Exclusive community features",
+      "Admin considerations for collaboration"
+    ]
+  },
+  "content_creation_detailed": {
+    "post_types": [
+      "Text posts",
+      "Posts with images",
+      "Polls (1-5 options)",
+      "Stories (24-hour)",
+      "Anonymous posts",
+      "Named posts"
+    ],
+    "editing_posts": "Edit posts within 1 hour of creation. Edited posts show edit timestamp.",
+    "deleting_posts": "Delete any of your posts anytime. Deleted posts can't be recovered.",
+    "post_visibility": "Posts reach followers' feed and may appear in discovery recommended feed based on engagement.",
+    "best_time_to_post": "Peak hours vary by community. Experiment and see when your audience is most active.",
+    "hashtags_and_mentions": "Use natural, relevant tags. Mentions tag specific users in comments/replies.",
+    "reposts": "Share others' content to your followers with optional commentary."
+  },
+  "engagement_and_community": {
+    "how_to_grow_audience": [
+      "Post consistently and authentically",
+      "Engage with other users' content",
+      "Use confession rooms for discovery",
+      "Answer Q&A questions thoughtfully",
+      "Maintain your streaks for visibility",
+      "Be respectful and helpful"
+    ],
+    "best_practices_for_posts": [
+      "Be authentic and genuine",
+      "Write engaging captions",
+      "Use clear, readable format",
+      "Respect community guidelines",
+      "Respond to comments",
+      "Share diverse content"
+    ],
+    "engaging_with_others": [
+      "Like posts you genuinely enjoy",
+      "Leave thoughtful comments",
+      "Answer anonymous questions",
+      "Participate in confession rooms",
+      "Share insights with community"
+    ],
+    "building_followers": "Followers see your posts in their feed. Build genuine follower base through quality content and respectful engagement.",
+    "collaboration_opportunities": "Tag friends in comments, answer their Q&As, participate in group discussions, repost great content."
+  }
+}
