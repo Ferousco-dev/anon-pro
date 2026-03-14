@@ -9,9 +9,6 @@ import 'package:image/image.dart' as img;
 class ImageUploadService {
   static const String _imageKitUploadUrl =
       'https://upload.imagekit.io/api/v1/files/upload';
-  static const String _imageKitApiUrl = 'https://api.imagekit.io/v1/files';
-  static const String _imageKitPrivateKey =
-      'private_oT2tK0HIfx3HV6/ZiorDqlAoImQ=';
 
   static const int _maxFileSizeBytes = 500 * 1024; // 500 KB threshold
   static const int _maxDimension = 2048; // Max width/height for resizing
@@ -112,18 +109,20 @@ class ImageUploadService {
 
       final folder = '/users/$userId/posts';
 
+      final signature = await _fetchImageKitSignature();
+
       // Create multipart request
       final request =
           http.MultipartRequest('POST', Uri.parse(_imageKitUploadUrl));
-
-      // ImageKit auth (Basic: privateKey:)
-      final auth = base64Encode(utf8.encode('$_imageKitPrivateKey:'));
-      request.headers['Authorization'] = 'Basic $auth';
 
       // Add form fields
       request.fields['fileName'] = fileName;
       request.fields['folder'] = folder;
       request.fields['useUniqueFileName'] = 'true';
+      request.fields['publicKey'] = signature['publicKey'] as String;
+      request.fields['signature'] = signature['signature'] as String;
+      request.fields['token'] = signature['token'] as String;
+      request.fields['expire'] = signature['expire'].toString();
 
       // Add file
       request.files.add(
@@ -225,14 +224,13 @@ class ImageUploadService {
   /// Internal: Delete file from ImageKit
   static Future<void> _deleteFromImageKit(String fileId) async {
     try {
-      final auth = base64Encode(utf8.encode('$_imageKitPrivateKey:'));
-      final response = await http.delete(
-        Uri.parse('$_imageKitApiUrl/$fileId'),
-        headers: {'Authorization': 'Basic $auth'},
-      ).timeout(const Duration(seconds: 30));
-
-      if (response.statusCode != 204 && response.statusCode != 200) {
-        debugPrint('ImageKit delete warning: ${response.statusCode}');
+      final supabase = Supabase.instance.client;
+      final response = await supabase.functions.invoke(
+        'imagekit-delete',
+        body: {'fileId': fileId},
+      );
+      if (response.data == null) {
+        debugPrint('ImageKit delete warning: empty response');
       }
     } catch (e) {
       debugPrint('ImageKit deletion error: $e');
@@ -242,4 +240,16 @@ class ImageUploadService {
 
   /// Get cached fileId (for reference)
   static String? getCachedFileId(String postId) => _fileIdCache[postId];
+
+  static Future<Map<String, dynamic>> _fetchImageKitSignature() async {
+    final supabase = Supabase.instance.client;
+    final response = await supabase.functions.invoke('imagekit-signature');
+    if (response.data == null) {
+      throw Exception(
+        'ImageKit signature failed: empty response',
+      );
+    }
+    final data = response.data as Map<String, dynamic>;
+    return data;
+  }
 }

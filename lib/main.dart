@@ -13,6 +13,7 @@ import 'services/offline_sync_service.dart';
 import 'services/auth_service.dart';
 import 'services/maintenance_service.dart';
 import 'services/error_reporting_service.dart';
+import 'services/user_activity_service.dart';
 import 'providers/connectivity_provider.dart';
 import 'providers/new_posts_provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -31,13 +32,12 @@ import 'screens/confession_rooms/confession_rooms_screen.dart';
 import 'screens/maintenance_screen.dart';
 import 'utils/constants.dart';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 // Background message handler for FCM (must be a top-level function and async for production safety)
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Ensure Firebase is initialized
+  // Ensure Firebase is initialized for background handling
   await Firebase.initializeApp();
 
   // Safely process notification payloads without debug prints
@@ -50,7 +50,6 @@ void main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     await Hive.initFlutter();
-    await dotenv.load(fileName: ".env");
     
     // Disable all print and debugPrint output in Release mode to prevent log leaks
     if (kReleaseMode) {
@@ -64,16 +63,13 @@ void main() async {
         DeviceOrientation.portraitDown,
       ]);
 
-      // Initialize Firebase for Android and iOS (with duplicate check)
-      try {
+      // Initialize Firebase for the current platform
+      if (kIsWeb) {
         await Firebase.initializeApp(
-            options: DefaultFirebaseOptions.currentPlatform);
-      } catch (e) {
-        // Firebase already initialized, ignore duplicate app error
-        if (!e.toString().contains('duplicate-app')) {
-          rethrow;
-        }
-        debugPrint('Firebase already initialized');
+          options: DefaultFirebaseOptions.web,
+        );
+      } else {
+        await Firebase.initializeApp();
       }
 
       // Set up background message handler for FCM
@@ -87,6 +83,7 @@ void main() async {
       );
 
       ErrorReportingService.instance.init();
+      await UserActivityService().updateLastSeen();
 
       await NotificationService().init();
       await FeedCacheService().initialize();
@@ -300,6 +297,7 @@ class _MaintenanceGateState extends State<MaintenanceGate>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      UserActivityService().updateLastSeen();
       _checkAndEnforce();
     }
   }

@@ -12,6 +12,7 @@ import 'security_settings_screen.dart';
 import 'ai_knowledge_admin_screen.dart';
 import 'moderation_keywords_screen.dart';
 import 'moderation_queue_screen.dart';
+import 'user_analytics_screen.dart';
 
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key});
@@ -85,6 +86,17 @@ class AdminPanelScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                     builder: (context) => const ActivityLogsScreen())),
+          ),
+          const SizedBox(height: 12),
+          _buildAdminCard(
+            'User Analytics',
+            'Growth, activity, and retention graphs',
+            Icons.show_chart_rounded,
+            () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) =>
+                        const AdminUserAnalyticsScreen())),
           ),
           const SizedBox(height: 12),
           _buildAdminCard(
