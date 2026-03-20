@@ -14,6 +14,8 @@ import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'full_screen_image.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/link_preview_service.dart';
 
 class PostCard extends StatefulWidget {
   final PostModel post;
@@ -314,6 +316,10 @@ Posted on ANONPRO
     final canEdit = widget.currentUser?.id == widget.post.userId &&
         widget.post.originalPostId == null &&
         widget.onEdit != null;
+    final displayContent = widget.post.originalContent ?? widget.post.content;
+    final linkOnly = LinkPreviewService.extractUrlIfOnlyLink(displayContent);
+    final safeLink =
+        linkOnly == null ? null : LinkPreviewService.sanitizeUrl(linkOnly);
 
     return Screenshot(
       controller: screenshotController,
@@ -484,9 +490,13 @@ Posted on ANONPRO
                       const SizedBox(height: 4),
                     ],
                     TappableMentionText(
-                      text: widget.post.originalContent ?? widget.post.content,
+                      text: displayContent,
                       aliasToUserId: widget.post.taggedUsers,
                     ),
+                    if (safeLink != null && !widget.post.hasImage) ...[
+                      const SizedBox(height: 10),
+                      _buildLinkPreview(safeLink),
+                    ],
                     if ((widget.post.postCategory ?? '').isNotEmpty ||
                         widget.post.customTags.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -507,15 +517,18 @@ Posted on ANONPRO
                       const SizedBox(height: 10),
                       GestureDetector(
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => FullScreenImage(
-                                imageUrl: widget.post.imageUrl!,
-                                tag: 'post_image_${widget.post.id}',
+                          // Only open full screen for network images
+                          if (widget.post.imageUrl!.startsWith('http')) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FullScreenImage(
+                                  imageUrl: widget.post.imageUrl!,
+                                  tag: 'post_image_${widget.post.id}',
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          }
                         },
                         child: Hero(
                           tag: 'post_image_${widget.post.id}',
@@ -532,32 +545,68 @@ Posted on ANONPRO
                                   width: 0.5,
                                 ),
                               ),
-                              child: CachedNetworkImage(
-                                imageUrl: widget.post.imageUrl!,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) =>
-                                    Shimmer.fromColors(
-                                  baseColor: AppConstants.darkGray,
-                                  highlightColor: AppConstants.mediumGray,
-                                  child: Container(
-                                    height: 200,
-                                    width: double.infinity,
-                                    color: AppConstants.darkGray,
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  height: 200,
-                                  color: AppConstants.darkGray,
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.broken_image,
-                                      color: AppConstants.textSecondary,
-                                      size: 48,
+                              child: widget.post.imageUrl!.startsWith('http')
+                                  ? CachedNetworkImage(
+                                      imageUrl: widget.post.imageUrl!,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) =>
+                                          Shimmer.fromColors(
+                                        baseColor: AppConstants.darkGray,
+                                        highlightColor: AppConstants.mediumGray,
+                                        child: Container(
+                                          height: 160,
+                                          width: double.infinity,
+                                          color: AppConstants.darkGray,
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          Container(
+                                        height: 160,
+                                        color: AppConstants.darkGray,
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.broken_image,
+                                            color: AppConstants.textSecondary,
+                                            size: 48,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  // Local file (optimistic post before upload)
+                                  : Image.file(
+                                      File(widget.post.imageUrl!),
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stack) =>
+                                          Container(
+                                        height: 160,
+                                        color: AppConstants.darkGray,
+                                        child: const Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: AppConstants.primaryBlue,
+                                                ),
+                                              ),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                'Uploading...',
+                                                style: TextStyle(
+                                                  color: AppConstants.textSecondary,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),
                             ),
                           ),
                         ),
@@ -635,6 +684,131 @@ Posted on ANONPRO
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLinkPreview(String url) {
+    return FutureBuilder<LinkPreviewData?>(
+      future: LinkPreviewService.fetch(url),
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+        final title = (data?.title.isNotEmpty ?? false) ? data!.title : url;
+        final description = data?.description ?? '';
+        final domain = data?.domain ?? Uri.parse(url).host;
+        final imageUrl = data?.imageUrl ?? '';
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppConstants.darkGray,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppConstants.dividerColor,
+              width: 0.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+                child: imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        width: double.infinity,
+                        height: 170,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          height: 170,
+                          color: AppConstants.mediumGray,
+                        ),
+                        errorWidget: (context, url, error) =>
+                            _buildPlaceholderImage(),
+                      )
+                    : _buildPlaceholderImage(),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppConstants.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        description,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppConstants.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      domain,
+                      style: const TextStyle(
+                        color: AppConstants.textTertiary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () => _openLink(url),
+                        style: TextButton.styleFrom(
+                          backgroundColor: AppConstants.primaryBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text('Enter'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPlaceholderImage() {
+    return Container(
+      width: double.infinity,
+      height: 170,
+      color: AppConstants.mediumGray,
+      child: Center(
+        child: Image.asset(
+          'assets/images/anon.png',
+          width: 72,
+          height: 72,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openLink(String url) async {
+    final uri = Uri.parse(url);
+    await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
     );
   }
 

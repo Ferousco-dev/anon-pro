@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/anonymous_question_model.dart';
 import '../../models/user_model.dart';
@@ -20,26 +19,17 @@ class QaScreen extends StatefulWidget {
   State<QaScreen> createState() => _QaScreenState();
 }
 
-class _QaScreenState extends State<QaScreen>
-    with SingleTickerProviderStateMixin {
+class _QaScreenState extends State<QaScreen> {
   final _supabase = Supabase.instance.client;
   List<AnonymousQuestionModel> _receivedQuestions = [];
   List<AnonymousQuestionModel> _sentQuestions = [];
   bool _isLoading = true;
-
-  late TabController _tabController;
+  String _qaFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadAllQuestions();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadAllQuestions() async {
@@ -171,200 +161,145 @@ class _QaScreenState extends State<QaScreen>
 
   @override
   Widget build(BuildContext context) {
+    final receivedAnswered = _receivedQuestions
+        .where((q) => q.answered && q.answer != null)
+        .toList();
+    final receivedPending = _receivedQuestions
+        .where((q) => !q.answered || q.answer == null)
+        .toList();
+
+    final counts = <String, int>{
+      'all': _receivedQuestions.length + _sentQuestions.length,
+      'inbox': _receivedQuestions.length,
+      'answered': receivedAnswered.length,
+      'pending': receivedPending.length,
+      'sent': _sentQuestions.length,
+    };
+
+    final items = _buildFilteredItems(
+      received: _receivedQuestions,
+      receivedAnswered: receivedAnswered,
+      receivedPending: receivedPending,
+      sent: _sentQuestions,
+    );
+
     return Column(
       children: [
-        // TabBar
-        Container(
-          height: 46,
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppConstants.darkGray,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppConstants.dividerColor),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: AppConstants.mediumGray,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              dividerColor: Colors.transparent,
-              labelColor: Colors.white,
-              unselectedLabelColor: AppConstants.textSecondary,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: 'Received'),
-                Tab(text: 'Sent'),
-              ],
-            ),
-          ),
-        ),
-        // TabBarView
+        _buildQaFilters(counts),
         Expanded(
           child: _isLoading
               ? const Center(
                   child: CircularProgressIndicator(
                       color: AppConstants.primaryBlue))
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildReceivedTab(),
-                    _buildSentTab(),
-                  ],
-                ),
+              : _buildQuestionsList(items),
         ),
       ],
     );
   }
 
-  Widget _buildReceivedTab() {
-    if (_receivedQuestions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inventory_2_outlined,
-                size: 60, color: AppConstants.textSecondary.withOpacity(0.5)),
-            const SizedBox(height: 16),
-            const Text(
-              'Your Q&A is empty',
-              style: TextStyle(color: AppConstants.textSecondary, fontSize: 16),
-            ),
-            if (!widget.isVerified) ...[
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  'Only verified users can receive and answer anonymous questions.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: AppConstants.textSecondary, fontSize: 13),
-                ),
-              )
-            ]
-          ],
-        ),
-      );
+  List<_QaItem> _buildFilteredItems({
+    required List<AnonymousQuestionModel> received,
+    required List<AnonymousQuestionModel> receivedAnswered,
+    required List<AnonymousQuestionModel> receivedPending,
+    required List<AnonymousQuestionModel> sent,
+  }) {
+    switch (_qaFilter) {
+      case 'inbox':
+        return received.map((q) => _QaItem(q, isSent: false)).toList();
+      case 'answered':
+        return receivedAnswered.map((q) => _QaItem(q, isSent: false)).toList();
+      case 'pending':
+        return receivedPending.map((q) => _QaItem(q, isSent: false)).toList();
+      case 'sent':
+        return sent.map((q) => _QaItem(q, isSent: true)).toList();
+      default:
+        final merged = <_QaItem>[
+          ...received.map((q) => _QaItem(q, isSent: false)),
+          ...sent.map((q) => _QaItem(q, isSent: true)),
+        ];
+        merged.sort((a, b) => b.question.createdAt.compareTo(a.question.createdAt));
+        return merged;
     }
+  }
 
-    return RefreshIndicator(
-      color: AppConstants.primaryBlue,
-      backgroundColor: AppConstants.darkGray,
-      onRefresh: _loadAllQuestions,
-      child: ListView.builder(
+  Widget _buildQaFilters(Map<String, int> counts) {
+    final items = [
+      const _QaFilterItem('all', 'All', Icons.inventory_2_rounded),
+      const _QaFilterItem('inbox', 'Inbox', Icons.inbox_rounded),
+      const _QaFilterItem('answered', 'Answered', Icons.check_circle_rounded),
+      const _QaFilterItem('pending', 'Pending', Icons.schedule_rounded),
+      const _QaFilterItem('sent', 'Sent', Icons.send_rounded),
+    ];
+
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _receivedQuestions.length,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          final q = _receivedQuestions[index];
-          final isAnswered = q.answered && q.answer != null;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppConstants.darkGray,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isAnswered
-                    ? AppConstants.primaryBlue.withOpacity(0.3)
-                    : AppConstants.dividerColor,
+          final item = items[index];
+          final isActive = _qaFilter == item.id;
+          final count = counts[item.id] ?? 0;
+          return GestureDetector(
+            onTap: () {
+              if (_qaFilter == item.id) return;
+              setState(() => _qaFilter = item.id);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppConstants.primaryBlue.withOpacity(0.18)
+                    : AppConstants.darkGray,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isActive
+                      ? AppConstants.primaryBlue
+                      : AppConstants.dividerColor,
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
+              child: Row(
+                children: [
+                  Icon(item.icon,
+                      size: 16,
+                      color: isActive
+                          ? AppConstants.primaryBlue
+                          : AppConstants.textSecondary),
+                  const SizedBox(width: 8),
+                  Text(
+                    item.label,
+                    style: TextStyle(
+                      color: isActive ? Colors.white : AppConstants.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (count > 0) ...[
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isAnswered
-                            ? AppConstants.primaryBlue.withOpacity(0.2)
-                            : AppConstants.mediumGray,
-                        borderRadius: BorderRadius.circular(6),
+                        color: isActive
+                            ? AppConstants.primaryBlue
+                            : AppConstants.textSecondary.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        isAnswered ? 'Answered' : 'New Question',
+                        '$count',
                         style: TextStyle(
-                          color: isAnswered
-                              ? AppConstants.primaryBlue
-                              : AppConstants.textSecondary,
-                          fontSize: 10,
+                          color: isActive ? Colors.white : Colors.white70,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const Spacer(),
-                    Text(
-                      timeago.format(q.createdAt),
-                      style: const TextStyle(
-                          color: AppConstants.textSecondary, fontSize: 12),
-                    ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  q.question,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (isAnswered) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppConstants.mediumGray,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Your Answer:',
-                          style: TextStyle(
-                            color: AppConstants.textSecondary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          q.answer!,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  )
                 ],
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => _showAnswerDialog(q),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppConstants.primaryBlue,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      backgroundColor:
-                          AppConstants.primaryBlue.withOpacity(0.1),
-                    ),
-                    child: Text(
-                      isAnswered ? 'Edit Answer' : 'Answer',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                )
-              ],
+              ),
             ),
           );
         },
@@ -372,27 +307,9 @@ class _QaScreenState extends State<QaScreen>
     );
   }
 
-  Widget _buildSentTab() {
-    if (_sentQuestions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.send_outlined,
-                size: 60, color: AppConstants.textSecondary.withOpacity(0.5)),
-            const SizedBox(height: 16),
-            const Text(
-              'No questions sent',
-              style: TextStyle(color: AppConstants.textSecondary, fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Questions you ask others will appear here.',
-              style: TextStyle(color: AppConstants.textSecondary, fontSize: 13),
-            ),
-          ],
-        ),
-      );
+  Widget _buildQuestionsList(List<_QaItem> items) {
+    if (items.isEmpty) {
+      return _buildQaEmptyState();
     }
 
     return RefreshIndicator(
@@ -401,123 +318,314 @@ class _QaScreenState extends State<QaScreen>
       onRefresh: _loadAllQuestions,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _sentQuestions.length,
+        itemCount: items.length,
         itemBuilder: (context, index) {
-          final q = _sentQuestions[index];
-          final isAnswered = q.answered && q.answer != null;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppConstants.darkGray,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppConstants.dividerColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Target User Row
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 12,
-                      backgroundColor: AppConstants.mediumGray,
-                      backgroundImage: q.targetUserProfileImageUrl != null
-                          ? NetworkImage(q.targetUserProfileImageUrl!)
-                          : null,
-                      child: q.targetUserProfileImageUrl == null
-                          ? const Icon(Icons.person,
-                              size: 16, color: Colors.white54)
-                          : null,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'You asked @${q.targetUserAlias ?? 'unknown'}',
-                      style: const TextStyle(
-                        color: AppConstants.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      timeago.format(q.createdAt),
-                      style: const TextStyle(
-                          color: AppConstants.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // The Question
-                Text(
-                  q.question,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // The Answer or Pending State
-                if (isAnswered)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppConstants.primaryBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: AppConstants.primaryBlue.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.check_circle_outline,
-                                size: 14, color: AppConstants.primaryBlue),
-                            SizedBox(width: 6),
-                            Text(
-                              'Answered',
-                              style: TextStyle(
-                                color: AppConstants.primaryBlue,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          q.answer!,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Row(
-                    children: [
-                      Icon(Icons.access_time_rounded,
-                          size: 14, color: Colors.white.withOpacity(0.4)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Waiting for answer...',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          );
+          final item = items[index];
+          return item.isSent
+              ? _buildSentCard(item.question)
+              : _buildReceivedCard(item.question);
         },
       ),
     );
   }
+
+  Widget _buildQaEmptyState() {
+    String title = 'No questions yet';
+    String subtitle = 'Questions will appear here as they arrive.';
+    IconData icon = Icons.inventory_2_outlined;
+
+    switch (_qaFilter) {
+      case 'inbox':
+        title = 'Inbox is empty';
+        subtitle = 'New questions will show up here.';
+        icon = Icons.inbox_rounded;
+        break;
+      case 'answered':
+        title = 'No answered questions';
+        subtitle = 'Your answered Q&A will show up here.';
+        icon = Icons.check_circle_outline;
+        break;
+      case 'pending':
+        title = 'No pending questions';
+        subtitle = 'You are all caught up for now.';
+        icon = Icons.schedule_rounded;
+        break;
+      case 'sent':
+        title = 'No questions sent';
+        subtitle = 'Questions you ask others will appear here.';
+        icon = Icons.send_outlined;
+        break;
+      default:
+        if (!widget.isVerified) {
+          subtitle =
+              'Only verified users can receive and answer anonymous questions.';
+        }
+        break;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon,
+                size: 56, color: AppConstants.textSecondary.withOpacity(0.5)),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppConstants.textSecondary,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppConstants.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReceivedCard(AnonymousQuestionModel q) {
+    final isAnswered = q.answered && q.answer != null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppConstants.darkGray,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isAnswered
+              ? AppConstants.primaryBlue.withOpacity(0.3)
+              : AppConstants.dividerColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isAnswered
+                      ? AppConstants.primaryBlue.withOpacity(0.2)
+                      : AppConstants.mediumGray,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isAnswered ? 'Answered' : 'New Question',
+                  style: TextStyle(
+                    color: isAnswered
+                        ? AppConstants.primaryBlue
+                        : AppConstants.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                timeago.format(q.createdAt),
+                style: const TextStyle(
+                    color: AppConstants.textSecondary, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            q.question,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (isAnswered) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppConstants.mediumGray,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your Answer:',
+                    style: TextStyle(
+                      color: AppConstants.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    q.answer!,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
+              ),
+            )
+          ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => _showAnswerDialog(q),
+              style: TextButton.styleFrom(
+                foregroundColor: AppConstants.primaryBlue,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                backgroundColor: AppConstants.primaryBlue.withOpacity(0.1),
+              ),
+              child: Text(
+                isAnswered ? 'Edit Answer' : 'Answer',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSentCard(AnonymousQuestionModel q) {
+    final isAnswered = q.answered && q.answer != null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppConstants.darkGray,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppConstants.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: AppConstants.mediumGray,
+                backgroundImage: q.targetUserProfileImageUrl != null
+                    ? NetworkImage(q.targetUserProfileImageUrl!)
+                    : null,
+                child: q.targetUserProfileImageUrl == null
+                    ? const Icon(Icons.person,
+                        size: 16, color: Colors.white54)
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'You asked @${q.targetUserAlias ?? 'unknown'}',
+                style: const TextStyle(
+                  color: AppConstants.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                timeago.format(q.createdAt),
+                style: const TextStyle(
+                    color: AppConstants.textSecondary, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            q.question,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (isAnswered)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppConstants.primaryBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: AppConstants.primaryBlue.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          size: 14, color: AppConstants.primaryBlue),
+                      SizedBox(width: 6),
+                      Text(
+                        'Answered',
+                        style: TextStyle(
+                          color: AppConstants.primaryBlue,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    q.answer!,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
+              ),
+            )
+          else
+            Row(
+              children: [
+                Icon(Icons.access_time_rounded,
+                    size: 14, color: Colors.white.withOpacity(0.4)),
+                const SizedBox(width: 6),
+                Text(
+                  'Waiting for answer...',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.4),
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QaItem {
+  final AnonymousQuestionModel question;
+  final bool isSent;
+
+  const _QaItem(this.question, {required this.isSent});
+}
+
+class _QaFilterItem {
+  final String id;
+  final String label;
+  final IconData icon;
+
+  const _QaFilterItem(this.id, this.label, this.icon);
 }

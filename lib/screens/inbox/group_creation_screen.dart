@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../main.dart';
 
 class GroupCreationScreen extends StatefulWidget {
@@ -63,7 +64,7 @@ class _GroupCreationScreenState extends State<GroupCreationScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = AppErrorHandler.userMessage(e);
         _isLoading = false;
       });
     }

@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../../utils/constants.dart';
+import '../../utils/app_config.dart';
 import '../../main.dart';
+import '../../services/notification_service.dart';
 
 class BroadcastScreen extends StatefulWidget {
   const BroadcastScreen({super.key});
@@ -76,6 +80,17 @@ class _BroadcastScreenState extends State<BroadcastScreen>
   Map<String, dynamic> get _currentType =>
       _broadcastTypes.firstWhere((t) => t['key'] == _selectedType);
 
+  String _colorToHex(Color color) {
+    return '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+  }
+
+  Uri _buildFunctionUrl(String functionName) {
+    final base = Uri.parse(AppConfig.supabaseUrl);
+    final functionHost =
+        base.host.replaceFirst('.supabase.co', '.functions.supabase.co');
+    return Uri(scheme: base.scheme, host: functionHost, path: '/$functionName');
+  }
+
   Future<void> _sendBroadcast() async {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
@@ -107,19 +122,68 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     HapticFeedback.lightImpact();
 
     try {
-      // Build the broadcast content with emoji prefix
       final emoji = _currentType['emoji'] as String;
-      final typeLabel = (_currentType['label'] as String).toUpperCase();
-      final broadcastContent = '$emoji [$typeLabel] $title\n\n$body';
+      final typeColor = _currentType['color'] as Color;
+      final adminId = supabase.auth.currentUser?.id;
+      if (adminId == null) {
+        throw Exception('Admin not authenticated');
+      }
 
-      // Store as a post visible to all users in their feed
-      await supabase.from('posts').insert({
-        'user_id': supabase.auth.currentUser!.id,
-        'content': broadcastContent,
-        'is_anonymous': false,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      try {
+        await NotificationService()
+            .ensureBroadcastSubscription()
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Don't block sending if subscription is slow.
+      }
+      final insertRes = await supabase
+          .from('broadcasts')
+          .insert({
+            'admin_id': adminId,
+            'title': title,
+            'body': body,
+            'broadcast_type': _selectedType,
+            'emoji': emoji,
+            'type_color': _colorToHex(typeColor),
+            'is_active': true,
+          })
+          .select('id')
+          .single();
+
+      final broadcastId = insertRes['id'] as String?;
+      if (broadcastId == null) {
+        throw Exception('Broadcast created but id missing');
+      }
+
+      final pushRes = await http
+          .post(
+            _buildFunctionUrl('send-notification'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${AppConfig.supabaseAnonKey}',
+              'apikey': AppConfig.supabaseAnonKey,
+            },
+            body: jsonEncode({
+              'topic': 'broadcasts',
+              'title': '$emoji $title',
+              'body': body,
+              'data': {
+                'type': 'broadcast',
+                'broadcastId': broadcastId,
+                'broadcastType': _selectedType,
+              },
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => http.Response('Request timeout', 408),
+          );
+
+      if (pushRes.statusCode < 200 || pushRes.statusCode >= 300) {
+        throw Exception(
+          'Push failed: ${pushRes.statusCode} ${pushRes.body}',
+        );
+      }
 
       // Show success state
       if (mounted) {

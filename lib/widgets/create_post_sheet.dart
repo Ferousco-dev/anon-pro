@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'dart:ui';
 import '../main.dart';
@@ -11,12 +12,15 @@ import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../utils/constants.dart';
 import '../services/image_upload_service.dart';
+import '../utils/app_error_handler.dart';
+import '../utils/app_logger.dart';
 import '../services/streak_service.dart';
 import '../services/notification_service.dart';
 
 class CreatePostSheet extends StatefulWidget {
   final UserModel? currentUser;
-  final VoidCallback? onPostCreated;
+  final void Function(PostModel createdPost, String? optimisticId)?
+      onPostCreated;
 
   /// Optional callback that receives the optimistic post immediately so
   /// the home feed can prepend it before the network finishes.
@@ -44,6 +48,8 @@ class _CreatePostSheetState extends State<CreatePostSheet>
   File? _selectedImage;
   bool _isCompressing = false;
   bool _isUploading = false;
+  String? _uploadStatus;
+  bool _showAdvanced = false;
 
   // Identity mode
   // 'anonymous' | 'verified_anonymous' | 'public'
@@ -132,13 +138,14 @@ class _CreatePostSheetState extends State<CreatePostSheet>
           ],
         );
 
-        if (croppedFile != null) {
-          if (mounted) {
-            setState(() {
-              _selectedImage = File(croppedFile.path);
-              _imageNameController.clear();
-            });
-          }
+        if (mounted) {
+          setState(() {
+            _selectedImage = File(
+              croppedFile?.path ?? pickedFile.path,
+            );
+            _imageNameController.clear();
+            _uploadStatus = null;
+          });
         }
       }
     }
@@ -200,14 +207,21 @@ class _CreatePostSheetState extends State<CreatePostSheet>
 
     // ── GATHER DATA BEFORE DISPOSE ──
     final customImageName = _imageNameController.text.trim();
+    final selectedImageFile = _selectedImage; // Capture before pop disposes state
+    if (selectedImageFile != null && mounted) {
+      setState(() => _uploadStatus = 'Preparing image...');
+    }
+    final shouldDelayClose = selectedImageFile != null;
 
     // ── OPTIMISTIC POST ──
+    String? optimisticId;
     if (scheduledAt == null) {
+      optimisticId = 'optimistic_${now.millisecondsSinceEpoch}';
       final optimisticPost = PostModel(
-        id: 'optimistic_${now.millisecondsSinceEpoch}',
+        id: optimisticId,
         userId: userId,
         content: content,
-        imageUrl: _selectedImage != null ? _selectedImage!.path : null,
+        imageUrl: selectedImageFile != null ? selectedImageFile.path : null,
         isAnonymous: isAnonymous,
         postIdentityMode: _identityMode,
         likesCount: 0,
@@ -239,86 +253,133 @@ class _CreatePostSheetState extends State<CreatePostSheet>
       );
 
       if (mounted) {
-        Navigator.pop(context);
+        if (!shouldDelayClose) {
+          Navigator.pop(context);
+        }
         widget.onOptimisticPost?.call(optimisticPost);
       }
     } else if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _scheduleDelayMinutes == 0
-                ? 'Post created'
-                : 'Post scheduled in $_scheduleDelayMinutes min',
+      if (!shouldDelayClose) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _scheduleDelayMinutes == 0
+                  ? 'Post created'
+                  : 'Post scheduled in $_scheduleDelayMinutes min',
+            ),
+            backgroundColor: AppConstants.primaryBlue,
           ),
-          backgroundColor: AppConstants.primaryBlue,
-        ),
-      );
+        );
+      }
     }
 
     // ── BACKGROUND NETWORK WORK ──
     try {
+      String? imageUrl;
+      String? forcedPostId;
+
+      // Upload image before insert so notifications include it.
+      if (selectedImageFile != null) {
+        forcedPostId = const Uuid().v4();
+        try {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Uploading image...'),
+                backgroundColor: AppConstants.primaryBlue,
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          debugPrint('[CreatePost] Image selected: ${selectedImageFile.path}');
+          debugPrint(
+              '[CreatePost] Image exists: ${selectedImageFile.existsSync()}');
+
+          if (mounted) {
+            setState(() => _isCompressing = true);
+          }
+          File imageToUpload = selectedImageFile;
+          imageToUpload = await ImageUploadService.compressImage(imageToUpload);
+          if (mounted) {
+            setState(() {
+              _isCompressing = false;
+              _uploadStatus = 'Uploading image to ImageKit...';
+            });
+          }
+
+          debugPrint('[CreatePost] Uploading to ImageKit...');
+          if (mounted) {
+            setState(() => _isUploading = true);
+          }
+          imageUrl = await ImageUploadService.uploadPostImageWithName(
+            imageFile: imageToUpload,
+            postId: forcedPostId,
+            customName: customImageName.isNotEmpty ? customImageName : null,
+          );
+          debugPrint('[CreatePost] Upload success: $imageUrl');
+          if (mounted) {
+            setState(() {
+              _isUploading = false;
+              _uploadStatus = 'Image uploaded.';
+            });
+          }
+        } catch (e) {
+          debugPrint('Failed to upload post image: $e');
+          if (mounted) {
+            setState(() {
+              _isUploading = false;
+              _isCompressing = false;
+              _uploadStatus = 'Image upload failed.';
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to upload photo: $e'),
+                backgroundColor: AppConstants.red,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          } else {
+            final rootContext = navigatorKey.currentState?.context;
+            if (rootContext != null) {
+              ScaffoldMessenger.of(rootContext).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to upload photo: $e'),
+                  backgroundColor: AppConstants.red,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            }
+          }
+        }
+      }
+
+      final insertPayload = <String, dynamic>{
+        'user_id': userId,
+        'content': content,
+        'image_url': imageUrl,
+        'is_anonymous': isAnonymous,
+        'post_identity_mode': _identityMode,
+        if (_isVerifiedUser) 'post_category': _selectedCategory,
+        if (_isVerifiedUser) 'post_custom_tags': _tagsController.text.trim(),
+        if (scheduledAt != null) 'scheduled_at': scheduledAt.toIso8601String(),
+        if (expiresAt != null) 'expires_at': expiresAt.toIso8601String(),
+        if (_isTemporary) 'is_temporary': true,
+      };
+      if (forcedPostId != null) {
+        insertPayload['id'] = forcedPostId;
+      }
+
       final postResponse = await supabase
           .from('posts')
-          .insert({
-            'user_id': userId,
-            'content': content,
-            'image_url': null,
-            'is_anonymous': isAnonymous,
-            'post_identity_mode': _identityMode,
-            if (_isVerifiedUser) 'post_category': _selectedCategory,
-            if (_isVerifiedUser)
-              'post_custom_tags': _tagsController.text.trim(),
-            if (scheduledAt != null)
-              'scheduled_at': scheduledAt.toIso8601String(),
-            if (expiresAt != null) 'expires_at': expiresAt.toIso8601String(),
-            if (_isTemporary) 'is_temporary': true,
-          })
+          .insert(insertPayload)
           .select()
           .single();
 
       final postId = postResponse['id'] as String;
-
-      await prefs.setInt('last_post_at_ms', nowMs);
-
-      if (scheduledAt != null && _scheduleReminder) {
-        await NotificationService().schedulePostReminder(
-          when: scheduledAt,
-          body: 'Your scheduled post is now live.',
-        );
-      }
-
-      if (scheduledAt == null) {
-        try {
-          await StreakService().recordPost(
-            userId: userId,
-            hasEngagement: false,
-          );
-        } catch (e) {
-          debugPrint('Failed to update streak: $e');
-        }
-      }
-
-      // Upload image if selected
-      String? imageUrl;
-      if (_selectedImage != null) {
-        try {
-          File imageToUpload = _selectedImage!;
-          imageToUpload = await ImageUploadService.compressImage(imageToUpload);
-
-          imageUrl = await ImageUploadService.uploadPostImageWithName(
-            imageFile: imageToUpload,
-            postId: postId,
-            customName: customImageName.isNotEmpty ? customImageName : null,
-          );
-
-          await supabase
-              .from('posts')
-              .update({'image_url': imageUrl}).eq('id', postId);
-        } catch (e) {
-          debugPrint('Failed to upload image: $e');
-        }
-      }
 
       // Parse @mentions and insert post_tags (only for non-anonymous posts)
       if (!isAnonymous) {
@@ -343,9 +404,69 @@ class _CreatePostSheetState extends State<CreatePostSheet>
         }
       }
 
-      widget.onPostCreated?.call();
+      final postData = Map<String, dynamic>.from(postResponse);
+      if (imageUrl != null) {
+        postData['image_url'] = imageUrl;
+      }
+      postData['users'] = widget.currentUser?.toJson();
+      final createdPost = PostModel.fromJson(postData);
+      widget.onPostCreated?.call(createdPost, optimisticId);
+      if (mounted && shouldDelayClose) {
+        Navigator.pop(context);
+      }
+
+      // Run reminders and streak updates in the background so uploads aren't blocked.
+      Future(() async {
+        try {
+          await prefs.setInt('last_post_at_ms', nowMs);
+          await NotificationService().scheduleInactivityReminder(now);
+
+          if (scheduledAt != null && _scheduleReminder) {
+            await NotificationService().schedulePostReminder(
+              when: scheduledAt,
+              body: 'Your scheduled post is now live.',
+            );
+          }
+
+          if (scheduledAt == null) {
+            await StreakService().recordPost(
+              userId: userId,
+              hasEngagement: false,
+            );
+          }
+        } catch (e) {
+          debugPrint('Post follow-up tasks failed: $e');
+        }
+      });
     } catch (e) {
-      debugPrint('Failed to create post in background: $e');
+      if (kDebugMode) {
+        AppLogger.e('Create post failed', error: e);
+        debugPrint('Create post failed: $e');
+      }
+      await AppErrorHandler.report(
+        error: e,
+        context: 'create_post_sheet:insert',
+      );
+      final rootContext = navigatorKey.currentState?.context;
+      final message =
+          kDebugMode ? e.toString() : AppErrorHandler.userMessage(e);
+      if (rootContext != null) {
+        ScaffoldMessenger.of(rootContext).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppConstants.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppConstants.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -396,72 +517,99 @@ class _CreatePostSheetState extends State<CreatePostSheet>
             ),
             child: SafeArea(
               top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ── Drag Handle ──
-                  Center(
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 10, bottom: 6),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: _kDimText.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(2),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
                       ),
-                    ),
-                  ),
-
-                  // ── Header ──
-                  _buildHeader(),
-
-                  // ── Identity Mode Picker ──
-                  _buildIdentityModePicker(),
-
-                  // ── Content Area ──
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Text Input
-                        _buildTextInput(),
-
-                        if (_isVerifiedUser) ...[
-                          _buildVerifiedPostMeta(),
-                          const SizedBox(height: 10),
-                        ],
-
-                        // Character counter
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 8),
-                          child: Text(
-                            '$remainingChars',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: remainingChars < 20
-                                  ? AppConstants.red
-                                  : _kDimText.withOpacity(0.5),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── Drag Handle ──
+                          Center(
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 10, bottom: 6),
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: _kDimText.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
-                        ),
 
-                        // Selected Image Preview
-                        if (_selectedImage != null) _buildImagePreview(),
+                          // ── Header ──
+                          _buildHeader(),
 
-                        // Poll Section
-                        if (_isPoll) _buildPollSection(),
+                          // ── Identity Mode Picker ──
+                          _buildIdentityModePicker(),
 
-                        _buildPostTimingSection(),
+                          // ── Content Area ──
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Text Input
+                                _buildTextInput(),
 
-                        // ── Bottom Toolbar ──
-                        _buildBottomToolbar(),
-                      ],
+                                // Character counter
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 4, bottom: 8),
+                                  child: Text(
+                                    '$remainingChars',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: remainingChars < 20
+                                          ? AppConstants.red
+                                          : _kDimText.withOpacity(0.5),
+                                    ),
+                                  ),
+                                ),
+
+                                // Selected Image Preview
+                                if (_selectedImage != null) _buildImagePreview(),
+
+                                const SizedBox(height: 6),
+                                _buildAdvancedToggle(),
+                                AnimatedCrossFade(
+                                  firstChild: const SizedBox.shrink(),
+                                  secondChild: Column(
+                                    children: [
+                                      const SizedBox(height: 10),
+                                      if (_isVerifiedUser) ...[
+                                        _buildVerifiedPostMeta(),
+                                        const SizedBox(height: 10),
+                                      ],
+                                      _buildPostTimingSection(),
+                                    ],
+                                  ),
+                                  crossFadeState: _showAdvanced
+                                      ? CrossFadeState.showSecond
+                                      : CrossFadeState.showFirst,
+                                  duration: const Duration(milliseconds: 200),
+                                  sizeCurve: Curves.easeOut,
+                                ),
+
+                                // Poll Section
+                                if (_isPoll) _buildPollSection(),
+
+                                // ── Bottom Toolbar ──
+                                _buildBottomToolbar(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),
@@ -783,6 +931,48 @@ class _CreatePostSheetState extends State<CreatePostSheet>
     );
   }
 
+  Widget _buildAdvancedToggle() {
+    return GestureDetector(
+      onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: _kGlass.withOpacity(0.35),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _kGlassBorder.withOpacity(0.3),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _showAdvanced ? Icons.tune_rounded : Icons.tune_outlined,
+              size: 16,
+              color: _kDimText.withOpacity(0.9),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _showAdvanced ? 'Hide options' : 'Advanced options',
+              style: const TextStyle(
+                color: _kSubtleWhite,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              _showAdvanced
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              color: _kDimText.withOpacity(0.9),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPostTimingSection() {
     final bestTimeText = _getBestTimeHint();
 
@@ -1004,6 +1194,18 @@ class _CreatePostSheetState extends State<CreatePostSheet>
               ),
           ],
         ),
+        if (_uploadStatus != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _uploadStatus!,
+            style: const TextStyle(
+              color: _kSubtleWhite,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
         const SizedBox(height: 8),
         // Image name — glass style
         Container(

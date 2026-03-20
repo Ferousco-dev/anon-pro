@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../models/post_model.dart';
 import '../../models/user_model.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/comments_sheet.dart';
 import '../../widgets/shareable_post_card.dart';
@@ -15,8 +16,13 @@ import '../../main.dart';
 /// Used when navigating from activity notifications (likes, comments, tags).
 class PostDetailScreen extends StatefulWidget {
   final String postId;
+  final bool openComments;
 
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    this.openComments = false,
+  });
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -27,6 +33,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   UserModel? _currentUser;
   bool _isLoading = true;
   String? _error;
+  bool _didOpenComments = false;
   final ScreenshotController _screenshotController = ScreenshotController();
 
   @override
@@ -136,16 +143,28 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           _post = post;
           _isLoading = false;
         });
+        _maybeOpenComments();
       }
     } catch (e) {
       debugPrint('Error loading post: $e');
       if (mounted) {
         setState(() {
-          _error = 'Failed to load post: ${e.toString()}';
+          _error = AppErrorHandler.userMessage(e);
           _isLoading = false;
         });
       }
     }
+  }
+
+  void _maybeOpenComments() {
+    if (!widget.openComments || _didOpenComments || _post == null) {
+      return;
+    }
+    _didOpenComments = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showComments();
+    });
   }
 
   Future<void> _handleLikeToggle() async {

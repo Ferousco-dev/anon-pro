@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
-import '../utils/constants.dart';
 
 /// Enum to select the skeleton variant.
 enum InboxSkeletonVariant { chat, notification }
@@ -19,21 +17,17 @@ class InboxSkeletonLoader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: const Color(0xFF121212),
-      highlightColor: const Color(0xFF1E1E1E),
-      child: ListView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        shrinkWrap: true,
-        padding: const EdgeInsets.only(top: 8),
-        itemCount: itemCount,
-        itemBuilder: (context, index) {
-          if (variant == InboxSkeletonVariant.notification) {
-            return _NotificationSkeletonItem(index: index);
-          }
-          return _ChatSkeletonItem(index: index);
-        },
-      ),
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      padding: const EdgeInsets.only(top: 8),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (variant == InboxSkeletonVariant.notification) {
+          return _NotificationSkeletonItem(index: index);
+        }
+        return _ChatSkeletonItem(index: index);
+      },
     );
   }
 }
@@ -54,9 +48,9 @@ class _ChatSkeletonItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+        color: const Color(0xFF0B0B0D),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF1F2226)),
       ),
       child: Row(
         children: [
@@ -65,7 +59,7 @@ class _ChatSkeletonItem extends StatelessWidget {
             width: 54,
             height: 54,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
+              color: const Color(0xFF1A1D22),
               shape: BoxShape.circle,
             ),
           ),
@@ -83,7 +77,7 @@ class _ChatSkeletonItem extends StatelessWidget {
                       width: nameWidth,
                       height: 14,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
+                        color: const Color(0xFF1A1D22),
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
@@ -93,7 +87,7 @@ class _ChatSkeletonItem extends StatelessWidget {
                       width: 32,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: const Color(0xFF1A1D22),
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -105,7 +99,7 @@ class _ChatSkeletonItem extends StatelessWidget {
                   width: msgWidth,
                   height: 11,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
+                    color: const Color(0xFF1A1D22),
                     borderRadius: BorderRadius.circular(5),
                   ),
                 ),
@@ -114,7 +108,7 @@ class _ChatSkeletonItem extends StatelessWidget {
                   width: msgWidth * 0.6,
                   height: 11,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.04),
+                    color: const Color(0xFF1A1D22),
                     borderRadius: BorderRadius.circular(5),
                   ),
                 ),
@@ -141,9 +135,9 @@ class _NotificationSkeletonItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.025),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.03)),
+        color: const Color(0xFF0B0B0D),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF1F2226)),
       ),
       child: Row(
         children: [
@@ -157,7 +151,7 @@ class _NotificationSkeletonItem extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: const Color(0xFF1A1D22),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -168,7 +162,7 @@ class _NotificationSkeletonItem extends StatelessWidget {
                     width: 20,
                     height: 20,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      color: const Color(0xFF1A1D22),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -187,7 +181,7 @@ class _NotificationSkeletonItem extends StatelessWidget {
                   width: textWidth,
                   height: 13,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: const Color(0xFF1A1D22),
                     borderRadius: BorderRadius.circular(5),
                   ),
                 ),
@@ -196,7 +190,7 @@ class _NotificationSkeletonItem extends StatelessWidget {
                   width: textWidth * 0.5,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: const Color(0xFF1A1D22),
                     borderRadius: BorderRadius.circular(5),
                   ),
                 ),
@@ -209,7 +203,7 @@ class _NotificationSkeletonItem extends StatelessWidget {
             width: 60,
             height: 30,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
+              color: const Color(0xFF1A1D22),
               borderRadius: BorderRadius.circular(15),
             ),
           ),

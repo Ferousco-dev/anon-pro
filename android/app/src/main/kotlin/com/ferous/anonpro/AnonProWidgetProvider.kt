@@ -44,7 +44,7 @@ class AnonProWidgetProvider : AppWidgetProvider() {
             val latestAnonPreview  = widgetData.getString(
                 "latest_anon_preview",
                 "No recent confessions — be the first to share anonymously."
-            )
+            ) ?: "No recent confessions — be the first to share anonymously."
             val rawName            = widgetData.getString("user_display_name", "AnonPro") ?: "AnonPro"
             val profileInitial     = rawName.take(1).uppercase()
             val lastUpdatedRaw     = widgetData.getString("last_updated", "") ?: ""

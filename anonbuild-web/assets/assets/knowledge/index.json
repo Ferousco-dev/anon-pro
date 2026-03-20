@@ -1,0 +1,721 @@
+{
+  "app_info": {
+    "name": "AnonPro",
+    "version": "1.0+",
+    "description": "An anonymous social media platform where users can interact, share thoughts, build communities, and express themselves freely while maintaining their privacy. It's a safe space where judgment is left at the door.",
+    "core_philosophy": "Privacy first, community second, judgement nowhere.",
+    "target_audience": "People seeking authentic, anonymous social connections without fear of judgment.",
+    "backend": "Supabase (PostgreSQL) with Firebase for notifications",
+    "ai_powered": "Custom local AI knowledge base - no external AI dependencies"
+  },
+  "greetings": {
+    "response": "Good day! How may I help you?",
+    "triggers": [
+      "good day",
+      "good morning",
+      "good afternoon",
+      "good evening",
+      "good night",
+      "morning",
+      "afternoon",
+      "evening",
+      "night",
+      "hey",
+      "hello",
+      "hi",
+      "howdy",
+      "greetings",
+      "sup",
+      "xup",
+      "what's up",
+      "how far na",
+      "how are you",
+      "how you dey",
+      "how you doing",
+      "how you doin",
+      "how you been",
+      "how things",
+      "how's it",
+      "how is it",
+      "what up",
+      "yo",
+      "holla",
+      "hallo",
+      "ey",
+      "hey there",
+      "hey you",
+      "howzit",
+      "how far",
+      "na wetin",
+      "wetin",
+      "sup bro",
+      "welcome",
+      "greet"
+    ]
+  },
+  "intent_questions": [
+    {
+      "intent": "about_ai",
+      "questions": [
+        "what is your name",
+        "who are you",
+        "what are you called",
+        "what should i call you",
+        "do you have a name",
+        "are you a bot",
+        "are you an ai",
+        "what kind of assistant are you",
+        "tell me about yourself",
+        "who created you"
+      ],
+      "answer": "My name is Anon AI. I'm the assistant designed to help users understand and navigate the AnonPro platform."
+    },
+    {
+      "intent": "about_app",
+      "questions": [
+        "what is anonpro",
+        "tell me about anonpro",
+        "what does anonpro do",
+        "what is this app",
+        "what is anonpro used for",
+        "why was anonpro created",
+        "what is the purpose of anonpro",
+        "explain anonpro",
+        "what can i do on anonpro",
+        "how does anonpro work"
+      ],
+      "answer": "AnonPro is an anonymous social platform where users can share thoughts, interact with others, and participate in communities while protecting their privacy."
+    },
+    {
+      "intent": "create_post",
+      "questions": [
+        "how do i post",
+        "how can i create a post",
+        "where do i make a post",
+        "how do i share a post",
+        "how do i write a post",
+        "how can i post something",
+        "where is the post button",
+        "how do i upload a post",
+        "how to create post",
+        "post how"
+      ],
+      "answer": "To create a post, go to the Home screen and tap the + button or the create post field."
+    },
+    {
+      "intent": "anonymous_post",
+      "questions": [
+        "can i post anonymously",
+        "how do i post anonymously",
+        "can i hide my identity",
+        "does anonpro allow anonymous posts",
+        "how do anonymous posts work",
+        "will people see my name if i post",
+        "can i stay anonymous on anonpro",
+        "anonymous posting",
+        "post without name",
+        "hide my identity"
+      ],
+      "answer": "Yes. When creating a post, you can choose anonymous mode to hide your identity from other users."
+    },
+    {
+      "intent": "messaging",
+      "questions": [
+        "how do i send a message",
+        "how can i chat with someone",
+        "how do i message someone",
+        "can i message users",
+        "how do i start a conversation",
+        "where is the inbox",
+        "how do i open chat",
+        "how do i send a dm",
+        "messaging system",
+        "send dm",
+        "start chat"
+      ],
+      "answer": "You can send messages by opening the Inbox tab and starting a conversation with another user."
+    },
+    {
+      "intent": "follow_users",
+      "questions": [
+        "how do i follow someone",
+        "how can i follow a user",
+        "where is the follow button",
+        "how do i subscribe to someone's posts",
+        "how do i follow people",
+        "how do i unfollow someone",
+        "following",
+        "start following",
+        "follow user"
+      ],
+      "answer": "Visit the user's profile and tap the Follow button to start following them."
+    },
+    {
+      "intent": "stories",
+      "questions": [
+        "what are stories",
+        "how do stories work",
+        "how do i post a story",
+        "what is status update",
+        "can i upload stories",
+        "how long do stories last",
+        "where can i see stories",
+        "stories feature",
+        "status updates"
+      ],
+      "answer": "Stories are short updates that disappear after 24 hours. You can upload images or videos as stories."
+    },
+    {
+      "intent": "karma",
+      "questions": [
+        "what is karma",
+        "how does karma work",
+        "how do i get karma",
+        "why do users have karma",
+        "what does karma mean",
+        "why is karma important",
+        "karma system",
+        "reputation points",
+        "build karma"
+      ],
+      "answer": "Karma represents your reputation in the community. You gain karma when users interact positively with your posts or comments."
+    },
+    {
+      "intent": "confession_rooms",
+      "questions": [
+        "what are confession rooms",
+        "how do confession rooms work",
+        "where are confession rooms",
+        "can i chat anonymously in rooms",
+        "how do i join confession rooms",
+        "what can i do in confession rooms",
+        "confession room feature",
+        "join rooms",
+        "anonymous chat"
+      ],
+      "answer": "Confession rooms are topic-based chat spaces where users can discuss things anonymously with others."
+    },
+    {
+      "intent": "blocking",
+      "questions": [
+        "how do i block someone",
+        "can i block a user",
+        "how do i stop someone from messaging me",
+        "how do i report a user",
+        "how do i report a post",
+        "how do i deal with harassment",
+        "block user",
+        "report content",
+        "block someone"
+      ],
+      "answer": "You can block or report users from their profile or from the menu on their posts."
+    },
+    {
+      "intent": "verification",
+      "questions": [
+        "how do i get verified",
+        "what is verification",
+        "how can i become a verified user",
+        "who gets verified",
+        "what are verified users",
+        "what is premium verified",
+        "get verified",
+        "verified badge",
+        "verification process"
+      ],
+      "answer": "Verification is granted by admins to trusted users. Verified users receive a badge and additional credibility."
+    },
+    {
+      "intent": "like_comment",
+      "questions": [
+        "how do i like a post",
+        "how do i like a comment",
+        "how can i like",
+        "where is the like button",
+        "like posts",
+        "like comments",
+        "upvote",
+        "how to interact"
+      ],
+      "answer": "Simply tap the like/upvote button under any post or comment you want to like."
+    },
+    {
+      "intent": "edit_profile",
+      "questions": [
+        "how do i edit my profile",
+        "how do i change my avatar",
+        "how can i update my profile",
+        "edit profile settings",
+        "change avatar",
+        "update bio",
+        "profile settings"
+      ],
+      "answer": "Go to your profile and tap Edit Profile to update your avatar, bio, display name, and cover image."
+    },
+    {
+      "intent": "fun_questions",
+      "questions": [
+        "tell me a joke",
+        "make me laugh",
+        "say something funny",
+        "do you know jokes",
+        "make a joke",
+        "joke please",
+        "funny joke"
+      ],
+      "answer": "Why do programmers prefer dark mode? Because light attracts bugs. 😄"
+    },
+    {
+      "intent": "smalltalk",
+      "questions": [
+        "are you real",
+        "are you human",
+        "do you sleep",
+        "do you have feelings",
+        "are you alive",
+        "do you think",
+        "are you smart",
+        "what are you really"
+      ],
+      "answer": "I'm an AI assistant designed to help users navigate AnonPro and answer questions about the app."
+    },
+    {
+      "intent": "help_general",
+      "questions": [
+        "help",
+        "i need help",
+        "can you help me",
+        "help me",
+        "assistance",
+        "support",
+        "need help",
+        "what can you help with"
+      ],
+      "answer": "I'm here to help! Ask me anything about posting, messaging, following users, karma, verification, or any AnonPro features."
+    },
+    {
+      "intent": "troubleshoot_posting",
+      "questions": [
+        "why can't i post",
+        "i can't post",
+        "posting not working",
+        "post failed",
+        "why post won't send",
+        "trouble posting"
+      ],
+      "answer": "Make sure you are connected to the internet, your account is not restricted, and you have entered some text."
+    },
+    {
+      "intent": "troubleshoot_messages",
+      "questions": [
+        "why are messages not loading",
+        "messages not loading",
+        "chat not loading",
+        "conversation won't load",
+        "inbox not working"
+      ],
+      "answer": "Check your internet connection or refresh the app. Messages may take a moment to load."
+    },
+    {
+      "intent": "like_engagement",
+      "questions": [
+        "how do i like",
+        "how do i comment",
+        "how do i engage",
+        "engagement",
+        "upvote",
+        "comment on post",
+        "interact with posts"
+      ],
+      "answer": "Like posts by tapping the heart/like button. Comment by tapping the comment icon and typing your message."
+    },
+    {
+      "intent": "repost",
+      "questions": [
+        "how do i repost",
+        "can i repost",
+        "repost button",
+        "share post",
+        "how to repost",
+        "repost content"
+      ],
+      "answer": "Tap the repost button to share a post with your followers."
+    }
+  ],
+  "ai_persona": {
+    "role": "You are the official AnonPro AI Assistant.",
+    "name": "Anon AI",
+    "personality": "You are extremely helpful, friendly, and slightly witty. You are knowledgeable about all things AnonPro and genuinely care about helping users have a great experience.",
+    "cultural_tone": "You occasionally use Nigerian pidgin slang (e.g., 'boss', 'omo', 'abeg', 'dey') to feel local and relatable, but always maintain professionalism and clarity.",
+    "communication_style": "Keep responses concise and mobile-friendly. Be conversational, warm, and encouraging. Use emojis sparingly.",
+    "expertise_areas": [
+      "How to use app features",
+      "Troubleshooting",
+      "Privacy and safety",
+      "Community guidelines",
+      "Account management",
+      "Feature explanations"
+    ],
+    "rules": [
+      "Always address the user respectfully and politely.",
+      "Never reveal private database structures, backend architecture, API keys, server secrets, or Supabase/Firebase configurations.",
+      "If you don't know the answer to a question about the app, apologize and suggest checking app settings, FAQ, or exploring features.",
+      "Keep answers concise (2-3 sentences ideally) and directly useful for a mobile chat interface.",
+      "Never provide instructions on how to hack, exploit, bypass security, circumvent bans, or abuse AnonPro's systems.",
+      "Adhere strictly to maintaining a safe, respectful, and inclusive community environment.",
+      "Don't pretend to be human or make up personal experiences.",
+      "If a user asks something outside app scope, politely redirect to AnonPro-related topics.",
+      "Respect user privacy—never ask for or suggest sharing sensitive personal information.",
+      "Promote positive community values: kindness, respect, anonymity protection, and safety."
+    ],
+    "what_to_do": [
+      "Answer questions about app features with enthusiasm and clarity.",
+      "Help users troubleshoot common issues (loading problems, sync issues, etc.).",
+      "Explain privacy protections and how anonymity works.",
+      "Encourage positive community engagement and healthy usage.",
+      "Direct users to relevant features based on their interests.",
+      "Provide tips for getting the most out of the platform."
+    ],
+    "conversation_memory": "You have access to the user's profile context (username, account age, etc.) to personalize responses without explicitly mentioning hidden data."
+  },
+  "assistant_personality": {
+    "traits": [
+      "Helpful",
+      "Friendly",
+      "Professional",
+      "Slightly witty"
+    ],
+    "purpose": "Guide users and improve their experience on AnonPro."
+  },
+  "assistant_behavior": {
+    "tone": "Friendly, helpful, concise",
+    "style": "Mobile-friendly short answers",
+    "emoji_usage": "Use emojis sparingly to maintain professionalism",
+    "goal": "Help users quickly understand and use the app"
+  },
+  "ai_security_rules": {
+    "blocked_topics": [
+      "admin commands",
+      "database access",
+      "server infrastructure",
+      "developer secrets",
+      "API keys",
+      "system vulnerabilities"
+    ],
+    "response_to_blocked_topics": "I'm sorry, but I can't provide information about that."
+  },
+  "ai_keywords_map": {
+    "posting": [
+      "post",
+      "create",
+      "share",
+      "confess",
+      "write",
+      "upload",
+      "new post",
+      "draft",
+      "compose",
+      "publish",
+      "tweet",
+      "status"
+    ],
+    "messaging": [
+      "message",
+      "dm",
+      "chat",
+      "inbox",
+      "talk",
+      "conversation",
+      "text",
+      "reply",
+      "respond",
+      "write back",
+      "communicate"
+    ],
+    "following": [
+      "follow",
+      "followers",
+      "following",
+      "subscribe",
+      "unfollow",
+      "user",
+      "people",
+      "connections"
+    ],
+    "profile": [
+      "profile",
+      "bio",
+      "avatar",
+      "username",
+      "account",
+      "settings",
+      "picture",
+      "cover",
+      "display name"
+    ],
+    "anonymity": [
+      "anonymous",
+      "anon",
+      "private",
+      "hide",
+      "identity",
+      "secret",
+      "unknown",
+      "incognito",
+      "no name"
+    ],
+    "karma": [
+      "karma",
+      "reputation",
+      "points",
+      "score",
+      "trust",
+      "rating",
+      "credibility",
+      "influence"
+    ],
+    "confession": [
+      "confession",
+      "confess",
+      "room",
+      "anonymous discussion",
+      "secret",
+      "topic",
+      "theme"
+    ],
+    "moderation": [
+      "report",
+      "block",
+      "ban",
+      "mod",
+      "safety",
+      "rules",
+      "policy",
+      "violation",
+      "abuse"
+    ],
+    "notifications": [
+      "notify",
+      "notification",
+      "alert",
+      "message alert",
+      "update",
+      "remind",
+      "bell"
+    ],
+    "feed": [
+      "feed",
+      "home",
+      "discover",
+      "explore",
+      "timeline",
+      "browse",
+      "scroll",
+      "trending"
+    ],
+    "engagement": [
+      "like",
+      "comment",
+      "interact",
+      "react",
+      "repost",
+      "engage",
+      "upvote",
+      "downvote"
+    ],
+    "help": [
+      "help",
+      "how",
+      "what",
+      "why",
+      "guide",
+      "tutorial",
+      "support",
+      "explain",
+      "clarify"
+    ],
+    "streak": [
+      "streak",
+      "consistency",
+      "daily",
+      "engagement track",
+      "consecutive",
+      "maintained"
+    ],
+    "verification": [
+      "verify",
+      "verified",
+      "badge",
+      "status",
+      "trust",
+      "checkmark",
+      "official"
+    ],
+    "direct_message": [
+      "dm",
+      "direct",
+      "private message",
+      "send message",
+      "conversation",
+      "private chat"
+    ]
+  },
+  "extended_keywords": {
+    "questions": [
+      "how",
+      "what",
+      "why",
+      "where",
+      "when",
+      "which",
+      "can",
+      "do",
+      "does",
+      "is",
+      "am",
+      "are",
+      "help",
+      "explain",
+      "tell",
+      "show",
+      "guide"
+    ],
+    "features": [
+      "feature",
+      "function",
+      "capability",
+      "option",
+      "button",
+      "menu",
+      "tab",
+      "screen",
+      "interface",
+      "tool"
+    ],
+    "emotional_queries": [
+      "feel",
+      "frustrated",
+      "angry",
+      "sad",
+      "happy",
+      "confused",
+      "stuck",
+      "wrong",
+      "broken",
+      "issue",
+      "problem"
+    ],
+    "actions": [
+      "create",
+      "make",
+      "post",
+      "add",
+      "remove",
+      "delete",
+      "edit",
+      "change",
+      "update",
+      "modify",
+      "send",
+      "share",
+      "see",
+      "view",
+      "check"
+    ],
+    "general": [
+      "please",
+      "thanks",
+      "thank you",
+      "appreciate",
+      "help me",
+      "need",
+      "want",
+      "like",
+      "love",
+      "use",
+      "using"
+    ]
+  },
+  "topics": {
+    "core": {
+      "file": "assets/knowledge/topics/core.json",
+      "keywords": [
+        "feed",
+        "post",
+        "profile",
+        "follow",
+        "notifications",
+        "repost",
+        "like",
+        "comment",
+        "discover"
+      ]
+    },
+    "community": {
+      "file": "assets/knowledge/topics/community.json",
+      "keywords": [
+        "community",
+        "engagement",
+        "followers",
+        "tips",
+        "connect",
+        "grow"
+      ]
+    },
+    "safety_privacy": {
+      "file": "assets/knowledge/topics/safety_privacy.json",
+      "keywords": [
+        "privacy",
+        "anonymous",
+        "report",
+        "block",
+        "safety",
+        "moderation"
+      ]
+    },
+    "growth": {
+      "file": "assets/knowledge/topics/growth.json",
+      "keywords": [
+        "karma",
+        "verification",
+        "monetize",
+        "content",
+        "streak",
+        "growth"
+      ]
+    },
+    "onboarding": {
+      "file": "assets/knowledge/topics/onboarding.json",
+      "keywords": [
+        "signup",
+        "login",
+        "getting started",
+        "new user",
+        "welcome",
+        "faq"
+      ]
+    },
+    "troubleshooting": {
+      "file": "assets/knowledge/topics/troubleshooting.json",
+      "keywords": [
+        "error",
+        "bug",
+        "issue",
+        "crash",
+        "slow",
+        "fix"
+      ]
+    },
+    "fun": {
+      "file": "assets/knowledge/topics/fun.json",
+      "keywords": [
+        "fun",
+        "tips",
+        "daily",
+        "chat",
+        "jokes",
+        "commands"
+      ]
+    }
+  }
+}

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
-import 'dart:ui';
 import '../../models/chat_model.dart';
-import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../widgets/chat_list_item.dart';
 import '../../widgets/inbox_skeleton_loader.dart';
 import '../../main.dart';
@@ -13,6 +12,7 @@ import 'group_creation_screen.dart';
 import 'qa_screen.dart';
 import '../post/post_detail_screen.dart';
 import '../../services/feed_cache_service.dart';
+import '../../services/notification_service.dart';
 
 // ─────────────────────────── Notification model ───────────────────────────
 class _NotifItem {
@@ -68,6 +68,14 @@ class _NotifItem {
       );
 }
 
+class _ActivityFilterItem {
+  final String id;
+  final String label;
+  final IconData icon;
+
+  const _ActivityFilterItem(this.id, this.label, this.icon);
+}
+
 // ─────────────────────────────── InboxScreen ──────────────────────────────
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -90,6 +98,11 @@ class _InboxScreenState extends State<InboxScreen>
   final Set<String> _followingIds = {};
   final Set<String> _followInFlight = {};
   int _unreadNotifCount = 0;
+  bool _activityDot = false;
+  bool _qaDot = false;
+  bool _directCleared = false;
+  bool _groupCleared = false;
+  String _activityFilter = 'all';
 
   late TabController _tabController;
   final FeedCacheService _cache = FeedCacheService();
@@ -104,6 +117,7 @@ class _InboxScreenState extends State<InboxScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_handleTabChanged);
     _loadFromCacheThenNetwork();
     _subscribeToConversations();
     _checkVerification();
@@ -146,9 +160,132 @@ class _InboxScreenState extends State<InboxScreen>
       _followingIds.addAll(cachedFollowing);
     }
 
-    // 3) Refresh from network
+    // 3) Load cached conversations
+    final cachedConvos = _cache.getConversations();
+    if (cachedConvos != null && cachedConvos.isNotEmpty && mounted) {
+      final convos = cachedConvos.map((m) => ChatModel.fromJson(m)).toList();
+      setState(() {
+        _conversations
+          ..clear()
+          ..addAll(convos);
+        _convLoading = false;
+      });
+    }
+
+    // 4) Refresh from network
     _loadConversations();
     _loadNotifications();
+  }
+
+  void _handleTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    switch (_tabController.index) {
+      case 0:
+        _markActivitySeen();
+        break;
+      case 1:
+        _markDmSeen();
+        break;
+      case 2:
+        _markGroupSeen();
+        break;
+      case 3:
+        _markQaSeen();
+        break;
+    }
+  }
+
+  Future<void> _markActivitySeen() async {
+    final me = supabase.auth.currentUser;
+    if (me == null) return;
+    try {
+      await supabase.from('users').update({
+        'last_activity_seen_at': DateTime.now().toIso8601String(),
+      }).eq('id', me.id);
+      if (mounted) {
+        setState(() => _activityDot = false);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _markDmSeen() async {
+    final me = supabase.auth.currentUser;
+    if (me == null) return;
+    try {
+      await supabase.from('users').update({
+        'last_dm_seen_at': DateTime.now().toIso8601String(),
+      }).eq('id', me.id);
+      if (mounted) {
+        setState(() => _directCleared = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _markGroupSeen() async {
+    final me = supabase.auth.currentUser;
+    if (me == null) return;
+    try {
+      await supabase.from('users').update({
+        'last_group_seen_at': DateTime.now().toIso8601String(),
+      }).eq('id', me.id);
+      if (mounted) {
+        setState(() => _groupCleared = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _markQaSeen() async {
+    final me = supabase.auth.currentUser;
+    if (me == null) return;
+    try {
+      await supabase.from('users').update({
+        'last_qa_seen_at': DateTime.now().toIso8601String(),
+      }).eq('id', me.id);
+      await supabase
+          .from('qa_answer_notifications')
+          .update({'is_read': true})
+          .eq('asker_id', me.id)
+          .eq('is_read', false);
+      if (mounted) {
+        setState(() => _qaDot = false);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _refreshActivityAndQaDots() async {
+    final me = supabase.auth.currentUser;
+    if (me == null) return;
+    try {
+      final userRes = await supabase
+          .from('users')
+          .select('last_activity_seen_at')
+          .eq('id', me.id)
+          .single();
+      final lastActivityRaw = userRes['last_activity_seen_at'] as String?;
+      final lastActivity = DateTime.tryParse(lastActivityRaw ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+
+      final activityRes = await supabase
+          .from('notification_events')
+          .select('id')
+          .eq('user_id', me.id)
+          .gt('created_at', lastActivity.toIso8601String())
+          .limit(1);
+
+      final qaRes = await supabase
+          .from('qa_answer_notifications')
+          .select('id')
+          .eq('asker_id', me.id)
+          .eq('is_read', false)
+          .limit(1);
+
+      if (mounted) {
+        setState(() {
+          _activityDot = (activityRes as List).isNotEmpty;
+          _qaDot = (qaRes as List).isNotEmpty;
+        });
+      }
+    } catch (_) {}
   }
 
   // ══════════════════════════ CONVERSATIONS ══════════════════════════════
@@ -182,6 +319,8 @@ class _InboxScreenState extends State<InboxScreen>
               name: item['conversation_name'] as String? ?? 'Unknown',
               isGroup: item['is_group'] as bool? ?? false,
               lastMessageContent: item['last_message_content'] as String?,
+              lastMessageSenderName:
+                  item['last_message_sender_name'] as String?,
               lastMessageTime: item['last_message_time'] != null
                   ? DateTime.parse(item['last_message_time'] as String)
                   : null,
@@ -209,12 +348,13 @@ class _InboxScreenState extends State<InboxScreen>
           _convLoading = false;
           _convError = null;
         });
+        _cache.saveConversations(loaded.map((c) => c.toJson()).toList());
       }
     } catch (e) {
       debugPrint('Error loading conversations: $e');
       if (mounted) {
         setState(() {
-          _convError = e.toString();
+          _convError = AppErrorHandler.userMessage(e);
           _convLoading = false;
         });
       }
@@ -236,9 +376,18 @@ class _InboxScreenState extends State<InboxScreen>
       final index = _conversations.indexWhere((c) => c.id == conversationId);
       if (index != -1) {
         final existing = _conversations[index];
+        if (!isFromCurrentUser) {
+          if (existing.isGroup) {
+            _groupCleared = false;
+          } else {
+            _directCleared = false;
+          }
+        }
         final updated = existing.copyWith(
           lastMessageContent: content,
           lastMessageTime: messageTime,
+          lastMessageSenderName:
+              isFromCurrentUser ? 'You' : existing.lastMessageSenderName,
           unreadCount: isFromCurrentUser
               ? existing.unreadCount
               : existing.unreadCount + 1,
@@ -273,6 +422,8 @@ class _InboxScreenState extends State<InboxScreen>
               name: item['conversation_name'] as String? ?? 'Unknown',
               isGroup: item['is_group'] as bool? ?? false,
               lastMessageContent: item['last_message_content'] as String?,
+              lastMessageSenderName:
+                  item['last_message_sender_name'] as String?,
               lastMessageTime: item['last_message_time'] != null
                   ? DateTime.parse(item['last_message_time'] as String)
                   : null,
@@ -298,6 +449,7 @@ class _InboxScreenState extends State<InboxScreen>
             ..clear()
             ..addAll(loaded);
         });
+        _cache.saveConversations(loaded.map((c) => c.toJson()).toList());
       }
     } catch (e) {
       debugPrint('Silent reload error: $e');
@@ -568,6 +720,7 @@ class _InboxScreenState extends State<InboxScreen>
         // Save to cache for next time
         _cache.saveNotifications(notifs.map((n) => n.toMap()).toList());
         _cache.saveFollowingIds(_followingIds.toList());
+        _refreshActivityAndQaDots();
       }
     } catch (e) {
       debugPrint('Error loading notifications: $e');
@@ -597,11 +750,24 @@ class _InboxScreenState extends State<InboxScreen>
             .delete()
             .eq('follower_id', me.id)
             .eq('following_id', targetId);
+        try {
+          await NotificationService()
+              .unsubscribeFromFollowersTopic(targetId);
+        } catch (e) {
+          debugPrint(
+              'Failed to unsubscribe from followers topic for $targetId: $e');
+        }
       } else {
         await supabase.from('follows').insert({
           'follower_id': me.id,
           'following_id': targetId,
         });
+        try {
+          await NotificationService().subscribeToFollowersTopic(targetId);
+        } catch (e) {
+          debugPrint(
+              'Failed to subscribe to followers topic for $targetId: $e');
+        }
       }
     } catch (e) {
       debugPrint('follow toggle error: $e');
@@ -620,14 +786,16 @@ class _InboxScreenState extends State<InboxScreen>
 
   // ══════════════════════════════ UI HELPERS ══════════════════════════════
 
-  // ── Accent colors for the premium palette ──
-  static const _kBgDark = Color(0xFF000000);
-  static const _kSurface = Color(0xFF0A0A0A);
-  static const _kCardBg = Color(0xFF121212);
-  static const _kAccentBlue = Color(0xFF007AFF);
-  static const _kAccentPurple = Color(0xFF5856D6);
-  static const _kAccentGreen = Color(0xFF34C759);
-  static const _kAccentPink = Color(0xFFFF375F);
+  // ── Minimal light palette ──
+  static const _kBg = Color(0xFF000000);
+  static const _kSurface = Color(0xFF0B0B0D);
+  static const _kBorder = Color(0xFF1F2226);
+  static const _kTextPrimary = Color(0xFFFFFFFF);
+  static const _kTextSecondary = Color(0xFF9AA0A6);
+  static const _kAccent = Color(0xFF1E88E5);
+  static const _kAccentBlue = Color(0xFF1E88E5);
+  static const _kAccentOrange = Color(0xFFF97316);
+  static const _kAccentRed = Color(0xFFFF4D4F);
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
@@ -640,23 +808,18 @@ class _InboxScreenState extends State<InboxScreen>
 
   Widget _buildAvatar(String? url, {double radius = 22}) {
     return Container(
-      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [
-            _kAccentBlue.withOpacity(0.5),
-            _kAccentPurple.withOpacity(0.3),
-          ],
-        ),
+        color: _kSurface,
+        border: Border.all(color: _kBorder),
       ),
       child: CircleAvatar(
         radius: radius,
-        backgroundColor: _kCardBg,
+        backgroundColor: _kSurface,
         backgroundImage: url != null ? NetworkImage(url) : null,
         child: url == null
             ? Icon(Icons.person_rounded,
-                color: AppConstants.textSecondary, size: radius * 0.9)
+                color: _kTextSecondary, size: radius * 0.9)
             : null,
       ),
     );
@@ -664,47 +827,40 @@ class _InboxScreenState extends State<InboxScreen>
 
   Widget _notifIcon(_NotifItem n) {
     late IconData icon;
-    late List<Color> gradColors;
+    late Color bgColor;
     switch (n.type) {
       case 'follow':
         icon = Icons.person_add_rounded;
-        gradColors = [_kAccentBlue, _kAccentPurple];
+        bgColor = _kAccentBlue.withOpacity(0.12);
         break;
       case 'like':
         icon = Icons.favorite_rounded;
-        gradColors = [_kAccentPink, const Color(0xFFFF6B8A)];
+        bgColor = _kAccentRed.withOpacity(0.12);
         break;
       case 'comment':
         icon = Icons.chat_bubble_rounded;
-        gradColors = [_kAccentGreen, const Color(0xFF38EF7D)];
+        bgColor = _kAccent.withOpacity(0.12);
         break;
       case 'tag':
         icon = Icons.alternate_email_rounded;
-        gradColors = [_kAccentBlue, const Color(0xFF00C6FF)];
+        bgColor = _kAccentBlue.withOpacity(0.12);
         break;
       case 'repost':
         icon = Icons.repeat_rounded;
-        gradColors = [AppConstants.orange, const Color(0xFFFFBF00)];
+        bgColor = _kAccentOrange.withOpacity(0.14);
         break;
       default:
         icon = Icons.notifications_rounded;
-        gradColors = [AppConstants.textSecondary, AppConstants.textTertiary];
+        bgColor = _kBorder;
     }
     return Container(
       width: 24,
       height: 24,
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: gradColors),
+        color: bgColor,
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: gradColors.first.withOpacity(0.4),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
-      child: Icon(icon, size: 12, color: Colors.white),
+      child: Icon(icon, size: 12, color: _kTextPrimary),
     );
   }
 
@@ -732,31 +888,12 @@ class _InboxScreenState extends State<InboxScreen>
     return GestureDetector(
       onTap: inFlight ? null : () => _toggleFollow(targetId),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          gradient: isFollowing
-              ? null
-              : const LinearGradient(
-                  colors: [_kAccentBlue, _kAccentPurple],
-                ),
-          color: isFollowing ? Colors.transparent : null,
-          border: Border.all(
-            color: isFollowing
-                ? AppConstants.textSecondary.withOpacity(0.3)
-                : Colors.transparent,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isFollowing
-              ? []
-              : [
-                  BoxShadow(
-                    color: _kAccentBlue.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+          color: isFollowing ? _kSurface : _kAccent,
+          border: Border.all(color: isFollowing ? _kBorder : _kAccent),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: inFlight
             ? const SizedBox(
@@ -768,12 +905,9 @@ class _InboxScreenState extends State<InboxScreen>
             : Text(
                 isFollowing ? 'Following' : 'Follow',
                 style: TextStyle(
-                  color: isFollowing
-                      ? AppConstants.textSecondary
-                      : AppConstants.white,
+                  color: isFollowing ? _kTextSecondary : Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
                 ),
               ),
       ),
@@ -800,28 +934,15 @@ class _InboxScreenState extends State<InboxScreen>
           Navigator.pushNamed(context, '/profile', arguments: n.actorId);
         }
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        padding: const EdgeInsets.all(14),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color:
-              n.isRead ? _kSurface.withOpacity(0.5) : _kCardBg.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(16),
+          color: _kSurface,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: n.isRead
-                ? Colors.white.withOpacity(0.03)
-                : _kAccentBlue.withOpacity(0.12),
+            color: n.isRead ? _kBorder : _kAccent.withOpacity(0.25),
           ),
-          boxShadow: n.isRead
-              ? []
-              : [
-                  BoxShadow(
-                    color: _kAccentBlue.withOpacity(0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -846,12 +967,10 @@ class _InboxScreenState extends State<InboxScreen>
                   Text(
                     _notifBody(n),
                     style: TextStyle(
-                      color: n.isRead
-                          ? AppConstants.white.withOpacity(0.7)
-                          : AppConstants.white,
-                      fontSize: 14,
+                      color: _kTextPrimary,
+                      fontSize: 14.5,
                       height: 1.35,
-                      fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w500,
+                      fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -860,7 +979,7 @@ class _InboxScreenState extends State<InboxScreen>
                   Text(
                     _relativeTime(n.createdAt),
                     style: TextStyle(
-                      color: AppConstants.textSecondary.withOpacity(0.6),
+                      color: _kTextSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
                     ),
@@ -877,14 +996,12 @@ class _InboxScreenState extends State<InboxScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: _kSurface,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.06),
-                  ),
+                  border: Border.all(color: _kBorder),
                 ),
                 child: Icon(Icons.chevron_right_rounded,
-                    color: AppConstants.textSecondary.withOpacity(0.5),
+                    color: _kTextSecondary,
                     size: 18),
               ),
           ],
@@ -913,24 +1030,19 @@ class _InboxScreenState extends State<InboxScreen>
               height: 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    _kAccentBlue.withOpacity(0.15),
-                    _kAccentPurple.withOpacity(0.1),
-                  ],
-                ),
+                color: _kSurface,
+                border: Border.all(color: _kBorder),
               ),
               child: Icon(Icons.notifications_none_rounded,
-                  size: 40, color: _kAccentBlue.withOpacity(0.5)),
+                  size: 40, color: _kTextSecondary),
             ),
             const SizedBox(height: 20),
             const Text(
               'No activity yet',
               style: TextStyle(
-                color: AppConstants.white,
+                color: _kTextPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 8),
@@ -938,7 +1050,7 @@ class _InboxScreenState extends State<InboxScreen>
               'When people follow, like, or comment\non your posts, you\'ll see it here.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppConstants.textSecondary.withOpacity(0.6),
+                color: _kTextSecondary,
                 fontSize: 14,
                 height: 1.5,
               ),
@@ -948,92 +1060,181 @@ class _InboxScreenState extends State<InboxScreen>
       );
     }
 
-    // Group by type for sections
     final followers = _notifications.where((n) => n.type == 'follow').toList();
     final likes = _notifications.where((n) => n.type == 'like').toList();
     final comments = _notifications.where((n) => n.type == 'comment').toList();
     final tags = _notifications.where((n) => n.type == 'tag').toList();
-    final others = _notifications
-        .where((n) =>
-            n.type != 'follow' &&
-            n.type != 'like' &&
-            n.type != 'comment' &&
-            n.type != 'tag')
-        .toList();
+    final filtered = _filterActivityNotifs(
+      followers: followers,
+      likes: likes,
+      comments: comments,
+      tags: tags,
+    );
 
-    final sections = <String, List<_NotifItem>>{
-      if (followers.isNotEmpty) 'New Followers': followers,
-      if (likes.isNotEmpty) 'Likes': likes,
-      if (comments.isNotEmpty) 'Comments': comments,
-      if (tags.isNotEmpty) 'Mentions': tags,
-      if (others.isNotEmpty) 'Activity': others,
+    final counts = <String, int>{
+      'all': _notifications.length,
+      'like': likes.length,
+      'comment': comments.length,
+      'tag': tags.length,
+      'follow': followers.length,
     };
 
     return RefreshIndicator(
       onRefresh: _loadNotifications,
-      color: _kAccentBlue,
+      color: _kAccent,
       backgroundColor: _kSurface,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(top: 8, bottom: 100),
+        padding: const EdgeInsets.only(top: 8, bottom: 96),
         children: [
-          for (final entry in sections.entries) ...[
-            _buildSectionHeader(entry.key, entry.value.length),
-            ...entry.value.map(_buildNotifTile),
-            const SizedBox(height: 8),
-          ],
+          _buildActivityFilters(counts),
+          const SizedBox(height: 8),
+          if (filtered.isEmpty) _buildEmptyActivityState(),
+          for (final item in filtered) _buildNotifTile(item),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-      child: Row(
-        children: [
-          // Gradient accent bar
-          Container(
-            width: 3,
-            height: 18,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [_kAccentBlue, _kAccentPurple],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+  List<_NotifItem> _filterActivityNotifs({
+    required List<_NotifItem> followers,
+    required List<_NotifItem> likes,
+    required List<_NotifItem> comments,
+    required List<_NotifItem> tags,
+  }) {
+    switch (_activityFilter) {
+      case 'like':
+        return likes;
+      case 'comment':
+        return comments;
+      case 'tag':
+        return tags;
+      case 'follow':
+        return followers;
+      default:
+        return _notifications;
+    }
+  }
+
+  Widget _buildActivityFilters(Map<String, int> counts) {
+    final items = [
+      const _ActivityFilterItem('all', 'All', Icons.all_inbox_rounded),
+      const _ActivityFilterItem('like', 'Likes', Icons.favorite_rounded),
+      const _ActivityFilterItem(
+          'comment', 'Comments', Icons.chat_bubble_rounded),
+      const _ActivityFilterItem('tag', 'Mentions', Icons.alternate_email_rounded),
+      const _ActivityFilterItem(
+          'follow', 'Followers', Icons.person_add_alt_1_rounded),
+    ];
+
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final isActive = _activityFilter == item.id;
+          final count = counts[item.id] ?? 0;
+          return GestureDetector(
+            onTap: () {
+              if (_activityFilter == item.id) return;
+              setState(() => _activityFilter = item.id);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isActive ? _kAccent.withOpacity(0.18) : _kSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isActive ? _kAccent : _kBorder,
+                ),
               ),
-              borderRadius: BorderRadius.circular(2),
+              child: Row(
+                children: [
+                  Icon(item.icon,
+                      size: 16,
+                      color: isActive ? _kAccent : _kTextSecondary),
+                  const SizedBox(width: 8),
+                  Text(
+                    item.label,
+                    style: TextStyle(
+                      color: isActive ? _kTextPrimary : _kTextSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (count > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? _kAccent
+                            : _kTextSecondary.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          color: isActive ? Colors.white : _kTextSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyActivityState() {
+    String title = 'No activity yet';
+    switch (_activityFilter) {
+      case 'like':
+        title = 'No likes yet';
+        break;
+      case 'comment':
+        title = 'No comments yet';
+        break;
+      case 'tag':
+        title = 'No mentions yet';
+        break;
+      case 'follow':
+        title = 'No followers yet';
+        break;
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      child: Column(
+        children: [
+          Icon(Icons.inbox_rounded, color: _kTextSecondary, size: 36),
+          const SizedBox(height: 12),
           Text(
             title,
             style: const TextStyle(
-              color: AppConstants.white,
+              color: _kTextPrimary,
               fontSize: 16,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  _kAccentBlue.withOpacity(0.2),
-                  _kAccentPurple.withOpacity(0.15),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '$count',
-              style: const TextStyle(
-                color: _kAccentBlue,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+          const SizedBox(height: 6),
+          Text(
+            'You\'ll see updates here as they happen.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _kTextSecondary,
+              fontSize: 13,
+              height: 1.4,
             ),
           ),
         ],
@@ -1061,31 +1262,26 @@ class _InboxScreenState extends State<InboxScreen>
               height: 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    _kAccentBlue.withOpacity(0.12),
-                    _kAccentPurple.withOpacity(0.08),
-                  ],
-                ),
+                color: _kSurface,
+                border: Border.all(color: _kBorder),
               ),
               child: Icon(emptyIcon,
-                  size: 36, color: _kAccentBlue.withOpacity(0.5)),
+                  size: 36, color: _kTextSecondary),
             ),
             const SizedBox(height: 20),
             Text(
               emptyMessage,
               style: const TextStyle(
-                color: AppConstants.white,
+                color: _kTextPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Start a conversation to see it here',
               style: TextStyle(
-                color: AppConstants.textSecondary.withOpacity(0.6),
+                color: _kTextSecondary,
                 fontSize: 14,
               ),
             ),
@@ -1096,11 +1292,11 @@ class _InboxScreenState extends State<InboxScreen>
 
     return RefreshIndicator(
       onRefresh: _loadConversations,
-      color: _kAccentBlue,
+      color: _kAccent,
       backgroundColor: _kSurface,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(top: 8, bottom: 100),
+        padding: const EdgeInsets.only(top: 4, bottom: 96),
         itemCount: chats.length,
         itemBuilder: (context, index) {
           final chat = chats[index];
@@ -1121,101 +1317,40 @@ class _InboxScreenState extends State<InboxScreen>
     final groupUnread = _groupChats.fold(0, (sum, c) => sum + c.unreadCount);
 
     return Scaffold(
-      backgroundColor: _kBgDark,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(120),
-        child: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              decoration: BoxDecoration(
-                color: _kBgDark.withOpacity(0.85),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.05),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: SafeArea(
-                bottom: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ── Top row: logo + actions ──
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      child: Row(
-                        children: [
-                          // Back button
-                          GestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.06),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.08),
-                                ),
-                              ),
-                              child: const Icon(Icons.arrow_back_rounded,
-                                  color: AppConstants.white, size: 20),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ShaderMask(
-                            shaderCallback: (bounds) => const LinearGradient(
-                              colors: [_kAccentBlue, _kAccentPurple],
-                            ).createShader(bounds),
-                            child: const Text(
-                              'Inbox',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          // Profile button
-                          GestureDetector(
-                            onTap: () {
-                              final currentUser = supabase.auth.currentUser;
-                              if (currentUser != null &&
-                                  currentUser.id.isNotEmpty) {
-                                Navigator.pushNamed(context, '/profile',
-                                    arguments: currentUser.id);
-                              }
-                            },
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.06),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.08),
-                                ),
-                              ),
-                              child: const Icon(Icons.person_outline_rounded,
-                                  color: AppConstants.white, size: 20),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ── Tab bar ──
-                    _buildPremiumTabBar(directUnread, groupUnread),
-                  ],
-                ),
-              ),
-            ),
+      backgroundColor: _kBg,
+      appBar: AppBar(
+        backgroundColor: _kSurface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleSpacing: 12,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: _kTextPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Inbox',
+          style: TextStyle(
+            color: _kTextPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
           ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline_rounded,
+                color: _kTextPrimary),
+            onPressed: () {
+              final currentUser = supabase.auth.currentUser;
+              if (currentUser != null && currentUser.id.isNotEmpty) {
+                Navigator.pushNamed(context, '/profile',
+                    arguments: currentUser.id);
+              }
+            },
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: _buildPremiumTabBar(directUnread, groupUnread),
         ),
       ),
       body: _convError != null && _tabController.index != 0
@@ -1242,52 +1377,27 @@ class _InboxScreenState extends State<InboxScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               // Create group FAB
-              GestureDetector(
-                onTap: _createGroup,
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: _kCardBg,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.group_add_rounded,
-                      color: AppConstants.white, size: 22),
+              FloatingActionButton(
+                heroTag: 'create_group',
+                onPressed: _createGroup,
+                backgroundColor: _kSurface,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: _kBorder),
                 ),
+                child: const Icon(Icons.group_add_rounded,
+                    color: _kTextPrimary, size: 22),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               // New chat FAB
-              GestureDetector(
-                onTap: _startNewChat,
-                child: Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [_kAccentBlue, _kAccentPurple],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _kAccentBlue.withOpacity(0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.edit_rounded,
-                      color: Colors.white, size: 26),
-                ),
+              FloatingActionButton(
+                heroTag: 'new_chat',
+                onPressed: _startNewChat,
+                backgroundColor: _kAccent,
+                elevation: 0,
+                child: const Icon(Icons.edit_rounded,
+                    color: Colors.white, size: 24),
               ),
             ],
           );
@@ -1298,35 +1408,27 @@ class _InboxScreenState extends State<InboxScreen>
 
   // ── Premium pill-style tab bar ──
   Widget _buildPremiumTabBar(int directUnread, int groupUnread) {
+    final showDirectDot = directUnread > 0 && !_directCleared;
+    final showGroupDot = groupUnread > 0 && !_groupCleared;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        color: _kSurface,
+        border: Border(bottom: BorderSide(color: _kBorder)),
       ),
       child: TabBar(
         controller: _tabController,
-        indicator: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              _kAccentBlue.withOpacity(0.25),
-              _kAccentPurple.withOpacity(0.18),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: _kAccentBlue.withOpacity(0.2)),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
+        indicatorColor: _kAccent,
+        indicatorWeight: 2.5,
+        indicatorSize: TabBarIndicatorSize.label,
         dividerColor: Colors.transparent,
-        labelColor: AppConstants.white,
-        unselectedLabelColor: AppConstants.textSecondary.withOpacity(0.6),
-        labelPadding: EdgeInsets.zero,
+        labelColor: _kTextPrimary,
+        unselectedLabelColor: _kTextSecondary,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 10),
         labelStyle: const TextStyle(
-          fontSize: 13,
+          fontSize: 13.5,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.1,
         ),
         unselectedLabelStyle: const TextStyle(
           fontSize: 13,
@@ -1336,26 +1438,26 @@ class _InboxScreenState extends State<InboxScreen>
           _buildPremiumTab(
             icon: Icons.notifications_rounded,
             label: 'Activity',
-            badgeCount: _unreadNotifCount,
-            badgeColor: _kAccentPink,
+            showDot: _activityDot,
+            dotColor: _kAccentRed,
           ),
           _buildPremiumTab(
             icon: Icons.chat_bubble_rounded,
             label: 'Direct',
-            badgeCount: directUnread,
-            badgeColor: _kAccentBlue,
+            showDot: showDirectDot,
+            dotColor: _kAccent,
           ),
           _buildPremiumTab(
             icon: Icons.groups_rounded,
             label: 'Groups',
-            badgeCount: groupUnread,
-            badgeColor: _kAccentGreen,
+            showDot: showGroupDot,
+            dotColor: _kAccentBlue,
           ),
           _buildPremiumTab(
             icon: Icons.inventory_2_rounded,
             label: 'Q&A',
-            badgeCount: 0,
-            badgeColor: AppConstants.orange,
+            showDot: _qaDot,
+            dotColor: _kAccentOrange,
           ),
         ],
       ),
@@ -1365,11 +1467,11 @@ class _InboxScreenState extends State<InboxScreen>
   Widget _buildPremiumTab({
     required IconData icon,
     required String label,
-    required int badgeCount,
-    required Color badgeColor,
+    required bool showDot,
+    required Color dotColor,
   }) {
     return Tab(
-      height: 40,
+      height: 46,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -1383,29 +1485,14 @@ class _InboxScreenState extends State<InboxScreen>
               maxLines: 1,
             ),
           ),
-          if (badgeCount > 0) ...[
+          if (showDot) ...[
             const SizedBox(width: 5),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 5.5, vertical: 1.5),
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(
-                color: badgeColor,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: badgeColor.withOpacity(0.35),
-                    blurRadius: 6,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: Text(
-                badgeCount > 99 ? '99+' : '$badgeCount',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
+                color: dotColor,
+                shape: BoxShape.circle,
               ),
             ),
           ],
@@ -1421,16 +1508,9 @@ class _InboxScreenState extends State<InboxScreen>
         margin: const EdgeInsets.all(32),
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
-          color: _kCardBg,
+          color: _kSurface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          border: Border.all(color: _kBorder),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1440,26 +1520,25 @@ class _InboxScreenState extends State<InboxScreen>
               height: 56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppConstants.red.withOpacity(0.12),
+                color: _kAccentRed.withOpacity(0.12),
               ),
               child: Icon(Icons.wifi_off_rounded,
-                  size: 28, color: AppConstants.red.withOpacity(0.7)),
+                  size: 28, color: _kAccentRed.withOpacity(0.7)),
             ),
             const SizedBox(height: 18),
             const Text(
               'Connection Error',
               style: TextStyle(
-                color: AppConstants.white,
+                color: _kTextPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               _convError ?? 'Could not load conversations',
               style: TextStyle(
-                color: AppConstants.textSecondary.withOpacity(0.6),
+                color: _kTextSecondary,
                 fontSize: 14,
                 height: 1.4,
               ),
@@ -1474,17 +1553,8 @@ class _InboxScreenState extends State<InboxScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_kAccentBlue, _kAccentPurple],
-                  ),
+                  color: _kAccent,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kAccentBlue.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: const Text(
                   'Retry',
@@ -1507,28 +1577,5 @@ class _InboxScreenState extends State<InboxScreen>
     _tabController.dispose();
     _conversationSubscription?.unsubscribe();
     super.dispose();
-  }
-}
-
-// ─────────────────────────── Unread Badge ───────────────────────────────
-class _UnreadBadge extends StatelessWidget {
-  final int count;
-  const _UnreadBadge({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    if (count == 0) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: AppConstants.primaryBlue,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        count > 99 ? '99+' : '$count',
-        style: const TextStyle(
-            color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-    );
   }
 }

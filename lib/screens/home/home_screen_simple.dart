@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -13,6 +14,7 @@ import '../../models/post_model.dart';
 import '../../models/user_model.dart';
 import '../../models/status_model.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../services/image_upload_service.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/comments_sheet.dart';
@@ -32,11 +34,10 @@ import '../../status/status_controller.dart';
 import '../../status/post_viewer.dart';
 import '../anonymous/anonymous_screen.dart';
 import '../../services/feed_cache_service.dart';
-import '../../services/broadcast_service.dart';
-import '../../widgets/broadcast_modal.dart';
 import '../../widgets/liquid_glass_nav_bar.dart';
 import '../../services/widget_data_service.dart';
 import '../../widgets/ai_floating_button.dart';
+import '../status/status_editor_screen.dart';
 // Supabase client getter
 final supabase = Supabase.instance.client;
 
@@ -55,7 +56,12 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
   List<PostModel> _trendingPosts = [];
   UserModel? _currentUser;
   bool _isLoading = true;
+  bool _isFetchingPosts = false;
+  bool _isLoadingMore = false;
+  bool _hasMorePosts = true;
+  DateTime? _oldestPostCursor;
   bool _isLoadingStatuses = false;
+  bool _hasInboxDot = false;
   bool _isCreatingStatus = false;
   double _uploadProgress = 0.0;
   int _selectedTab = 0;
@@ -64,6 +70,10 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
   List<StatusModel> _statuses = [];
   List<UserStatusGroup> _statusGroups = [];
   bool _isNavBarVisible = true;
+  bool _isTitlePulsing = false;
+  bool _isTitlePressed = false;
+  late AnimationController _titlePulseController;
+  late Animation<Color?> _titleColorAnimation;
 
   // Scroll animation properties
   late AnimationController _navBarAnimationController;
@@ -107,8 +117,20 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
           parent: _navBarAnimationController, curve: Curves.easeInOut),
     );
 
+    _titlePulseController = AnimationController(
+      duration: const Duration(milliseconds: 1600),
+      vsync: this,
+    );
+    _titleColorAnimation = ColorTween(
+      begin: AppConstants.white,
+      end: AppConstants.primaryBlue,
+    ).animate(
+      CurvedAnimation(parent: _titlePulseController, curve: Curves.easeInOut),
+    );
+
     // Load from cache first (instant), then from network
     _loadFromCacheThenNetwork();
+    unawaited(_refreshInboxDot());
 
     // Initialize new posts real-time listener
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -117,8 +139,6 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
             Provider.of<NewPostsProvider>(context, listen: false);
         newPostsProvider.initializeRealtimeListener();
 
-        // Initialize broadcast service and check for unseen broadcasts
-        _initializeBroadcasts();
       }
     });
 
@@ -130,6 +150,125 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     if (newTab != _selectedTab && mounted) {
       setState(() => _selectedTab = newTab);
     }
+  }
+
+  void _setTitlePulse(bool enable) {
+    if (enable == _isTitlePulsing) return;
+    _isTitlePulsing = enable;
+    if (enable) {
+      _titlePulseController.repeat(reverse: true);
+    } else {
+      _titlePulseController.stop();
+      _titlePulseController.value = 0.0;
+    }
+  }
+
+  Future<void> _handleTitleRefresh(NewPostsProvider provider) async {
+    if (_selectedTab != 0) return;
+    HapticFeedback.selectionClick();
+    await Future.wait([
+      _loadPosts(showLoading: false, clearNewPosts: true),
+      _loadStatuses(),
+    ]);
+    provider.clearNewPosts();
+    _setTitlePulse(false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Feed refreshed'),
+          backgroundColor: AppConstants.green,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshInboxDot() async {
+    final me = supabase.auth.currentUser;
+    if (me == null) return;
+    try {
+      final userRes = await supabase
+          .from('users')
+          .select(
+              'last_activity_seen_at, last_dm_seen_at, last_group_seen_at, last_qa_seen_at')
+          .eq('id', me.id)
+          .single();
+
+      DateTime _parseOrEpoch(String? raw) {
+        return DateTime.tryParse(raw ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+
+      final lastActivity =
+          _parseOrEpoch(userRes['last_activity_seen_at'] as String?);
+      final lastDm = _parseOrEpoch(userRes['last_dm_seen_at'] as String?);
+      final lastGroup =
+          _parseOrEpoch(userRes['last_group_seen_at'] as String?);
+
+      final activityRes = await supabase
+          .from('notification_events')
+          .select('id')
+          .eq('user_id', me.id)
+          .gt('created_at', lastActivity.toIso8601String())
+          .limit(1);
+      final hasActivity = (activityRes as List).isNotEmpty;
+
+      final qaRes = await supabase
+          .from('qa_answer_notifications')
+          .select('id')
+          .eq('asker_id', me.id)
+          .eq('is_read', false)
+          .limit(1);
+      final hasQa = (qaRes as List).isNotEmpty;
+
+      final convRes = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, conversations!inner(is_group)')
+          .eq('user_id', me.id);
+      final directIds = <String>[];
+      final groupIds = <String>[];
+      for (final row in convRes as List) {
+        final convo = row['conversations'] as Map<String, dynamic>?;
+        final isGroup = convo?['is_group'] == true;
+        final convoId = row['conversation_id'] as String?;
+        if (convoId == null) continue;
+        if (isGroup) {
+          groupIds.add(convoId);
+        } else {
+          directIds.add(convoId);
+        }
+      }
+
+      bool hasDm = false;
+      if (directIds.isNotEmpty) {
+        final dmRes = await supabase
+            .from('messages')
+            .select('id')
+            .inFilter('conversation_id', directIds)
+            .neq('sender_id', me.id)
+            .gt('created_at', lastDm.toIso8601String())
+            .limit(1);
+        hasDm = (dmRes as List).isNotEmpty;
+      }
+
+      bool hasGroup = false;
+      if (groupIds.isNotEmpty) {
+        final groupRes = await supabase
+            .from('messages')
+            .select('id')
+            .inFilter('conversation_id', groupIds)
+            .neq('sender_id', me.id)
+            .gt('created_at', lastGroup.toIso8601String())
+            .limit(1);
+        hasGroup = (groupRes as List).isNotEmpty;
+      }
+
+      final hasDot = hasActivity || hasQa || hasDm || hasGroup;
+      if (mounted) {
+        setState(() => _hasInboxDot = hasDot);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -157,56 +296,6 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     }
   }
 
-  // Initialize broadcasts and show unseen ones
-  Future<void> _initializeBroadcasts() async {
-    try {
-      await broadcastService.init();
-      final unseenBroadcasts = await broadcastService.getUnseenBroadcasts();
-
-      if (unseenBroadcasts.isNotEmpty && mounted) {
-        // Show broadcasts one by one
-        for (final broadcast in unseenBroadcasts) {
-          if (mounted) {
-            await _showBroadcastModal(broadcast);
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error initializing broadcasts: $e');
-    }
-  }
-
-  Future<void> _showBroadcastModal(BroadcastMessage broadcast) async {
-    final Color typeColor = _parseColorFromHex(broadcast.typeColor);
-
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext ctx) {
-        return BroadcastModal(
-          emoji: broadcast.emoji,
-          type: broadcast.type,
-          title: broadcast.title,
-          message: broadcast.body,
-          typeColor: typeColor,
-          onDismiss: () {
-            broadcastService.markAsSeen(broadcast.id);
-            Navigator.pop(ctx);
-          },
-        );
-      },
-    );
-  }
-
-  Color _parseColorFromHex(String hexColor) {
-    try {
-      final hex = hexColor.replaceAll('#', '');
-      return Color(int.parse('FF$hex', radix: 16));
-    } catch (e) {
-      return AppConstants.primaryBlue;
-    }
-  }
-
   /// Load cached data instantly, then refresh from network
   Future<void> _loadFromCacheThenNetwork() async {
     // 1) Instantly load cached current user
@@ -224,7 +313,10 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       setState(() {
         _posts = posts;
         _isLoading = false; // Show cached data immediately
+        _hasMorePosts = posts.length >= AppConstants.postsPerPage;
+        _oldestPostCursor = posts.isNotEmpty ? posts.last.createdAt : null;
       });
+      _prefetchPostImages(posts, limit: 4);
     }
 
     // 3) Refresh from network in background
@@ -250,9 +342,10 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     } catch (e) {
       debugPrint('Error loading user: $e');
     } finally {
+      final showLoading = _posts.isEmpty;
       // Load posts and statuses after user is loaded
       await Future.wait([
-        _loadPosts(),
+        _loadPosts(showLoading: showLoading, clearNewPosts: true),
         _loadStatuses(),
         _loadTrendingPosts(),
       ]);
@@ -288,6 +381,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
           .toList();
       if (mounted) {
         setState(() => _trendingPosts = posts);
+        _prefetchPostImages(posts, limit: 4);
       }
     } catch (e) {
       debugPrint('Error loading trending posts: $e');
@@ -330,6 +424,170 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
         _navBarAnimationController.reverse();
       }
     }
+
+    _maybeLoadMore();
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients) return;
+    if (_isLoadingMore || _isFetchingPosts || !_hasMorePosts) return;
+    if (_scrollController.position.extentAfter < 500) {
+      unawaited(_loadMorePosts());
+    }
+  }
+
+  void _prefetchPostImages(List<PostModel> posts, {int limit = 6}) {
+    if (!mounted) return;
+    final urls = posts
+        .map((p) => p.imageUrl)
+        .where((url) => url != null && url.startsWith('http'))
+        .take(limit);
+    for (final url in urls) {
+      precacheImage(CachedNetworkImageProvider(url!), context);
+    }
+  }
+
+  Future<Map<String, Map<String, String>>> _loadTaggedUsers(
+      List<String> postIds) async {
+    final taggedMap = <String, Map<String, String>>{};
+    if (postIds.isEmpty) return taggedMap;
+
+    try {
+      final tagsResponse = await supabase
+          .from('post_tags')
+          .select('post_id, tagged_user_id')
+          .inFilter('post_id', postIds);
+
+      final taggedUserIds = (tagsResponse as List)
+          .map((r) => r['tagged_user_id'] as String)
+          .toSet()
+          .toList();
+
+      Map<String, String> idToAlias = {};
+      if (taggedUserIds.isNotEmpty) {
+        final usersRes = await supabase
+            .from('users')
+            .select('id, alias')
+            .inFilter('id', taggedUserIds);
+        for (final u in usersRes as List) {
+          final alias = u['alias'] as String?;
+          if (alias != null) {
+            idToAlias[u['id'] as String] = alias;
+          }
+        }
+      }
+
+      for (final row in tagsResponse) {
+        final postId = row['post_id'] as String;
+        final taggedUserId = row['tagged_user_id'] as String;
+        final alias = idToAlias[taggedUserId];
+        if (alias != null) {
+          taggedMap.putIfAbsent(postId, () => {})[alias] = taggedUserId;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading post_tags: $e');
+    }
+
+    return taggedMap;
+  }
+
+  Future<List<PostModel>> _applyPostMetadata(List<PostModel> posts) async {
+    if (posts.isEmpty) return posts;
+
+    final postIds = posts.map((p) => p.id).toList();
+    final taggedMap = await _loadTaggedUsers(postIds);
+
+    if (_currentUser != null && posts.isNotEmpty) {
+      final likesResponse = await supabase
+          .from('likes')
+          .select('post_id, user_id')
+          .eq('user_id', _currentUser!.id)
+          .inFilter('post_id', postIds);
+
+      final likedPostIds = (likesResponse as List)
+          .map((like) => like['post_id'] as String)
+          .toSet();
+
+      final repostsResponse = await supabase
+          .from('posts')
+          .select('original_post_id')
+          .eq('user_id', _currentUser!.id)
+          .inFilter('original_post_id', postIds);
+
+      final repostedPostIds = (repostsResponse as List)
+          .map((repost) => repost['original_post_id'] as String)
+          .toSet();
+
+      final allLikesResponse = await supabase
+          .from('likes')
+          .select('post_id')
+          .inFilter('post_id', postIds);
+
+      final likesCountMap = <String, int>{};
+      for (var like in allLikesResponse as List) {
+        final postId = like['post_id'] as String;
+        likesCountMap[postId] = (likesCountMap[postId] ?? 0) + 1;
+      }
+
+      for (int i = 0; i < posts.length; i++) {
+        posts[i] = posts[i].copyWith(
+          isLikedByCurrentUser: likedPostIds.contains(posts[i].id),
+          isRepostedByCurrentUser: repostedPostIds.contains(posts[i].id),
+          likesCount: likesCountMap[posts[i].id] ?? 0,
+          taggedUsers: taggedMap[posts[i].id],
+        );
+      }
+    } else {
+      for (int i = 0; i < posts.length; i++) {
+        posts[i] = posts[i].copyWith(taggedUsers: taggedMap[posts[i].id]);
+      }
+    }
+
+    return posts;
+  }
+
+  Future<List<PostModel>> _fetchPostsPage(
+      {DateTime? before, int limit = AppConstants.postsPerPage}) async {
+    final nowIso = DateTime.now().toIso8601String();
+
+    var query = supabase.from('posts').select('''
+            *,
+            users (
+              id,
+              alias,
+              display_name,
+              profile_image_url,
+              role,
+              is_verified
+            )
+          ''')
+      ..or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+      ..or('expires_at.is.null,expires_at.gt.$nowIso');
+
+    if (before != null) {
+      query = query.lt('created_at', before.toIso8601String());
+    }
+
+    final response = await query
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    final posts = (response as List).map((postData) {
+      return PostModel.fromJson(postData as Map<String, dynamic>);
+    }).toList();
+
+    return _applyPostMetadata(posts);
+  }
+
+  void _saveHomeFeedToCache(List<PostModel> posts) {
+    final cacheData = posts.map((p) => p.toJson()).toList();
+    for (int i = 0; i < posts.length; i++) {
+      if (posts[i].user != null) {
+        cacheData[i]['users'] = posts[i].user!.toJson();
+      }
+    }
+    _cache.saveHomeFeed(cacheData);
   }
 
   Future<void> _loadStatuses() async {
@@ -431,165 +689,99 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     }
   }
 
-  Future<void> _loadPosts() async {
+  Future<void> _loadPosts(
+      {bool showLoading = true, bool clearNewPosts = false}) async {
+    if (_isFetchingPosts) return;
+    _isFetchingPosts = true;
     try {
-      final nowIso = DateTime.now().toIso8601String();
-
-      // COMPLETE QUERY: Include all fields needed by UserModel
-      final response = await supabase
-          .from('posts')
-          .select('''
-            *,
-            users (
-              id,
-              email,
-              alias,
-              display_name,
-              bio,
-              profile_image_url,
-              cover_image_url,
-              role,
-              is_banned,
-              is_verified,
-              followers_count,
-              following_count,
-              posts_count,
-              created_at,
-              updated_at
-            )
-          ''')
-          .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
-          .or('expires_at.is.null,expires_at.gt.$nowIso')
-          .order('created_at', ascending: false)
-          .limit(50);
-
-
-      final posts = (response as List).map((postData) {
-        return PostModel.fromJson(postData as Map<String, dynamic>);
-      }).toList();
-
-
-
-      final postIds = posts.map((p) => p.id).toList();
-
-      // Load post_tags for @mention navigation (alias -> userId) - for all users
-      final taggedMap = <String, Map<String, String>>{};
-      if (postIds.isNotEmpty) {
-        try {
-          final tagsResponse = await supabase
-              .from('post_tags')
-              .select('post_id, tagged_user_id')
-              .inFilter('post_id', postIds);
-
-          final taggedUserIds = (tagsResponse as List)
-              .map((r) => r['tagged_user_id'] as String)
-              .toSet()
-              .toList();
-
-          Map<String, String> idToAlias = {};
-          if (taggedUserIds.isNotEmpty) {
-            final usersRes = await supabase
-                .from('users')
-                .select('id, alias')
-                .inFilter('id', taggedUserIds);
-            for (final u in usersRes as List) {
-              final alias = u['alias'] as String?;
-              if (alias != null) {
-                idToAlias[u['id'] as String] = alias;
-              }
-            }
-          }
-
-          for (final row in tagsResponse) {
-            final postId = row['post_id'] as String;
-            final taggedUserId = row['tagged_user_id'] as String;
-            final alias = idToAlias[taggedUserId];
-            if (alias != null) {
-              taggedMap.putIfAbsent(postId, () => {})[alias] = taggedUserId;
-            }
-          }
-        } catch (e) {
-          debugPrint('Error loading post_tags: $e');
-        }
+      if (showLoading && mounted) {
+        setState(() => _isLoading = true);
       }
 
-      // Load likes for current user
-      if (_currentUser != null && posts.isNotEmpty) {
-        final likesResponse = await supabase
-            .from('likes')
-            .select('post_id, user_id')
-            .eq('user_id', _currentUser!.id)
-            .inFilter('post_id', postIds);
+      final posts = await _fetchPostsPage();
 
-        final likedPostIds = (likesResponse as List)
-            .map((like) => like['post_id'] as String)
-            .toSet();
+      if (!mounted) return;
 
-        // Load reposts for current user
-        final repostsResponse = await supabase
-            .from('posts')
-            .select('original_post_id')
-            .eq('user_id', _currentUser!.id)
-            .inFilter('original_post_id', postIds);
+      setState(() {
+        _posts = posts;
+        _isLoading = false;
+        _hasMorePosts = posts.length >= AppConstants.postsPerPage;
+        _oldestPostCursor = posts.isNotEmpty ? posts.last.createdAt : null;
+      });
 
-        final repostedPostIds = (repostsResponse as List)
-            .map((repost) => repost['original_post_id'] as String)
-            .toSet();
-
-        // Load all likes count
-        final allLikesResponse = await supabase
-            .from('likes')
-            .select('post_id')
-            .inFilter('post_id', postIds);
-
-        final likesCountMap = <String, int>{};
-        for (var like in allLikesResponse as List) {
-          final postId = like['post_id'] as String;
-          likesCountMap[postId] = (likesCountMap[postId] ?? 0) + 1;
-        }
-
-        // Update posts with like status, repost status, counts, and tagged users
-        for (int i = 0; i < posts.length; i++) {
-          posts[i] = posts[i].copyWith(
-            isLikedByCurrentUser: likedPostIds.contains(posts[i].id),
-            isRepostedByCurrentUser: repostedPostIds.contains(posts[i].id),
-            likesCount: likesCountMap[posts[i].id] ?? 0,
-            taggedUsers: taggedMap[posts[i].id],
-          );
-        }
-      } else if (posts.isNotEmpty) {
-        // No current user - still apply tagged users for display
-        for (int i = 0; i < posts.length; i++) {
-          posts[i] = posts[i].copyWith(taggedUsers: taggedMap[posts[i].id]);
-        }
+      if (clearNewPosts && mounted) {
+        final newPostsProvider =
+            Provider.of<NewPostsProvider>(context, listen: false);
+        newPostsProvider.clearNewPosts();
       }
 
-      if (mounted) {
+      _prefetchPostImages(posts);
+      _saveHomeFeedToCache(posts);
 
-        setState(() {
-          _posts = posts;
-          _isLoading = false;
-        });
-
-        // Save to cache for next time
-        final cacheData = posts.map((p) => p.toJson()).toList();
-        // Include user data in cache
-        for (int i = 0; i < posts.length; i++) {
-          if (posts[i].user != null) {
-            cacheData[i]['users'] = posts[i].user!.toJson();
-          }
-        }
-        _cache.saveHomeFeed(cacheData);
-
-        // Sync native widgets with latest data
-        WidgetDataService.updateWidgetData();
-
-
-      }
+      // Sync native widgets with latest data
+      WidgetDataService.updateWidgetData();
     } catch (e) {
       debugPrint('Error loading posts: $e');
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    } finally {
+      _isFetchingPosts = false;
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMorePosts) return;
+    if (_oldestPostCursor == null) return;
+    _isLoadingMore = true;
+    if (mounted) {
+      setState(() {});
+    }
+
+    try {
+      final morePosts = await _fetchPostsPage(
+        before: _oldestPostCursor,
+        limit: AppConstants.postsPerPage,
+      );
+
+      if (morePosts.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMorePosts = false;
+          });
+        }
+        return;
+      }
+
+      final existingIds = _posts.map((p) => p.id).toSet();
+      final newPosts =
+          morePosts.where((p) => !existingIds.contains(p.id)).toList();
+
+      if (newPosts.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMorePosts = false;
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _posts.addAll(newPosts);
+          _oldestPostCursor = _posts.last.createdAt;
+          _hasMorePosts = newPosts.length >= AppConstants.postsPerPage;
+        });
+      }
+
+      _prefetchPostImages(newPosts);
+      _saveHomeFeedToCache(_posts);
+    } catch (e) {
+      debugPrint('Error loading more posts: $e');
+    } finally {
+      _isLoadingMore = false;
+      if (mounted) {
+        setState(() {});
       }
     }
   }
@@ -610,20 +802,11 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
             *,
             users (
               id,
-              email,
               alias,
               display_name,
-              bio,
               profile_image_url,
-              cover_image_url,
               role,
-              is_banned,
-              is_verified,
-              followers_count,
-              following_count,
-              posts_count,
-              created_at,
-              updated_at
+              is_verified
             )
           ''').inFilter('id', postIds);
 
@@ -708,7 +891,13 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       if (mounted) {
         setState(() {
           _posts.insertAll(0, enrichedPosts);
+          if (_posts.isNotEmpty) {
+            _oldestPostCursor = _posts.last.createdAt;
+          }
         });
+
+        _prefetchPostImages(enrichedPosts);
+        _saveHomeFeedToCache(_posts);
 
         // Smooth scroll to top
         _scrollController.animateTo(
@@ -747,11 +936,27 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       });
 
       final bytes = await picked.readAsBytes();
-      final fileExt = picked.name.split('.').last.toLowerCase();
-      final contentType = 'image/$fileExt';
+      final editResult = await Navigator.push<StatusEditorResult>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StatusEditorScreen(
+            originalBytes: bytes,
+            fileName: picked.name,
+          ),
+        ),
+      );
+      if (editResult == null) {
+        setState(() {
+          _uploadProgress = 0.0;
+          _isCreatingStatus = false;
+        });
+        return;
+      }
+      final editedBytes = editResult.bytes;
+      const contentType = 'image/jpeg';
 
       final objectPath =
-          'statuses/${_currentUser!.id}/${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
+          'statuses/${_currentUser!.id}/${DateTime.now().millisecondsSinceEpoch}_status.jpg';
 
       // Update progress during file upload
       if (mounted) {
@@ -762,7 +967,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
 
       await supabase.storage.from('statuses').uploadBinary(
             objectPath,
-            bytes,
+            editedBytes,
             fileOptions: FileOptions(
               contentType: contentType,
               upsert: false,
@@ -872,8 +1077,20 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
         },
         // Called after background DB work completes — replaces optimistic post
         // with the real server record (proper ID, final image URL, etc.)
-        onPostCreated: () {
-          _loadPosts();
+        onPostCreated: (createdPost, optimisticId) {
+          if (!mounted) return;
+          setState(() {
+            if (optimisticId != null) {
+              final idx = _posts.indexWhere((p) => p.id == optimisticId);
+              if (idx != -1) {
+                _posts[idx] = createdPost;
+              } else {
+                _posts.insert(0, createdPost);
+              }
+            } else {
+              _posts.insert(0, createdPost);
+            }
+          });
         },
       ),
     );
@@ -886,12 +1103,23 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       backgroundColor: Colors.transparent,
       builder: (context) => EditPostSheet(
         post: post,
-        onPostUpdated: _loadPosts,
+        onPostUpdated: () =>
+            _loadPosts(showLoading: false, clearNewPosts: true),
       ),
     );
   }
 
   void _showComments(PostModel post) {
+    if (post.id.startsWith('optimistic_')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Still posting. Try again in a moment.'),
+          backgroundColor: AppConstants.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -968,7 +1196,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed to share: ${e.toString()}'),
+                              content: Text(AppErrorHandler.userMessage(e)),
                               backgroundColor: AppConstants.red,
                               behavior: SnackBarBehavior.floating,
                             ),
@@ -1072,7 +1300,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to like post: ${e.toString()}'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1111,7 +1339,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete post: ${e.toString()}'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1196,14 +1424,14 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
         );
 
         // Refresh posts to show the new repost
-        await _loadPosts();
+        await _loadPosts(showLoading: false, clearNewPosts: true);
       }
     } catch (e) {
       debugPrint('Error reposting: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to repost: ${e.toString()}'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1233,8 +1461,20 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
             );
           }
         },
-        onPostCreated: () {
-          _loadPosts();
+        onPostCreated: (createdPost, optimisticId) {
+          if (!mounted) return;
+          setState(() {
+            if (optimisticId != null) {
+              final idx = _posts.indexWhere((p) => p.id == optimisticId);
+              if (idx != -1) {
+                _posts[idx] = createdPost;
+              } else {
+                _posts.insert(0, createdPost);
+              }
+            } else {
+              _posts.insert(0, createdPost);
+            }
+          });
         },
       ),
     );
@@ -1277,6 +1517,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     return LiquidGlassNavBar(
       selectedIndex: _selectedTab,
       profileImageUrl: _currentUser?.profileImageUrl,
+      showInboxDot: _hasInboxDot,
       onTap: (index) async {
         setState(() => _selectedTab = index);
         if (index == 0 || index == 1) {
@@ -1289,6 +1530,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
         }
         if (index == 2) {
           await Navigator.pushNamed(context, '/groups');
+          await _refreshInboxDot();
         } else if (index == 3) {
           if (_currentUser != null) {
             await Navigator.pushNamed(context, '/profile',
@@ -1322,7 +1564,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
               color: AppConstants.primaryBlue,
               onRefresh: () async {
                 await Future.wait([
-                  _loadPosts(),
+                  _loadPosts(showLoading: false, clearNewPosts: true),
                   _loadStatuses(),
                   _loadTrendingPosts(),
                 ]);
@@ -1333,16 +1575,45 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
                 padding: EdgeInsets.zero,
                 itemCount: 1 +
                     _posts.length +
-                    (_trendingPosts.isNotEmpty ? 1 : 0),
+                    (_trendingPosts.isNotEmpty ? 1 : 0) +
+                    (_isLoadingMore || _hasMorePosts ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return _buildStatusBar();
                   }
                   final trendingInsertIndex =
-                      1 + (_posts.length > 20 ? 20 : _posts.length);
+                      1 +
+                          (_posts.length > AppConstants.postsPerPage
+                              ? AppConstants.postsPerPage
+                              : _posts.length);
                   if (_trendingPosts.isNotEmpty &&
                       index == trendingInsertIndex) {
                     return _buildTrendingSection();
+                  }
+
+                  final loadMoreIndex = 1 +
+                      _posts.length +
+                      (_trendingPosts.isNotEmpty ? 1 : 0);
+                  if (index == loadMoreIndex) {
+                    if (_isLoadingMore) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppConstants.primaryBlue,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    if (!_hasMorePosts) {
+                      return const SizedBox(height: 24);
+                    }
+                    return const SizedBox.shrink();
                   }
 
                   var postIndex = index - 1;
@@ -1552,35 +1823,62 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
             backgroundColor: AppConstants.black,
             elevation: 0,
             automaticallyImplyLeading: false,
-            title: Text(
-              _selectedTab == 0 ? 'ANONPRO' : 'Anonymous',
-              style: const TextStyle(
-                color: AppConstants.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+            title: Consumer<NewPostsProvider>(
+              builder: (context, provider, _) {
+                final isHomeTab = _selectedTab == 0;
+                final shouldPulse = provider.showNotification && isHomeTab;
+                _setTitlePulse(shouldPulse);
+                final titleText = isHomeTab ? 'ANONPRO' : 'Anonymous';
+
+                return GestureDetector(
+                  onTapDown: isHomeTab
+                      ? (_) => setState(() => _isTitlePressed = true)
+                      : null,
+                  onTapUp: isHomeTab
+                      ? (_) => setState(() => _isTitlePressed = false)
+                      : null,
+                  onTapCancel:
+                      isHomeTab ? () => setState(() => _isTitlePressed = false) : null,
+                  onTap: isHomeTab ? () => _handleTitleRefresh(provider) : null,
+                  child: AnimatedScale(
+                    scale: _isTitlePressed ? 0.97 : 1.0,
+                    duration: const Duration(milliseconds: 120),
+                    curve: Curves.easeOut,
+                    child: AnimatedBuilder(
+                      animation: _titlePulseController,
+                      builder: (context, _) {
+                        final color = shouldPulse
+                            ? (_titleColorAnimation.value ??
+                                AppConstants.white)
+                            : AppConstants.white;
+                        final glow = shouldPulse
+                            ? _titlePulseController.value
+                            : 0.0;
+                        return Text(
+                          titleText,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            shadows: glow > 0
+                                ? [
+                                    Shadow(
+                                      color: AppConstants.primaryBlue
+                                          .withOpacity(0.35 * glow),
+                                      blurRadius: 8 * glow,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
             centerTitle: false,
             actions: [
-              IconButton(
-                onPressed: () async {
-                  await Future.wait([
-                    _loadPosts(),
-                    _loadStatuses(),
-                  ]);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Feed refreshed'),
-                        backgroundColor: AppConstants.green,
-                        behavior: SnackBarBehavior.floating,
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.refresh, color: AppConstants.white),
-              ),
               IconButton(
                 onPressed: () => Navigator.push(
                   context,
@@ -1590,38 +1888,6 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
                   ),
                 ),
                 icon: const Icon(Icons.search, color: AppConstants.white),
-              ),
-              IconButton(
-                onPressed: () async {
-                  // If user not loaded yet, try to load them
-                  if (_currentUser == null) {
-                    await _loadCurrentUser();
-                  }
-
-                  final currentUser = _currentUser;
-                  if (currentUser != null) {
-                    Navigator.pushNamed(context, '/profile',
-                        arguments: currentUser.id);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please log in to view profile'),
-                        backgroundColor: AppConstants.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
-                icon: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppConstants.primaryBlue,
-                  backgroundImage: _currentUser?.profileImageUrl != null
-                      ? NetworkImage(_currentUser!.profileImageUrl!)
-                      : null,
-                  child: _currentUser?.profileImageUrl == null
-                      ? const Icon(Icons.person, size: 20, color: Colors.white)
-                      : null,
-                ),
               ),
             ],
           ),
@@ -1682,6 +1948,7 @@ class _HomeScreenSimpleState extends State<HomeScreenSimple>
     _pageController.removeListener(_onPageChanged);
     _pageController.dispose();
     _navBarAnimationController.dispose();
+    _titlePulseController.dispose();
     _cleanupUserData();
     // Dispose new posts provider real-time listener
     if (mounted) {

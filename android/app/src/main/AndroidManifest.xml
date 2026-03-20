@@ -40,6 +40,12 @@
             </intent-filter>
         </activity>
 
+        <!-- image_cropper activity -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+
         <!-- Widget provider declaration -->
         <receiver android:name="com.ferous.anonpro.AnonProWidgetProvider" android:exported="true">
             <intent-filter>
@@ -50,19 +56,13 @@
                 android:resource="@xml/anonpro_widget_info" />
         </receiver>
 
-        <!-- FCM service -->
-        <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="false">
-            <intent-filter android:priority="-500">
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <!-- Default notification channel (optional) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="new_posts" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
 
         <!-- Flutter embedding meta-data -->
         <meta-data

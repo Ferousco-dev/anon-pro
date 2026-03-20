@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../utils/app_config.dart';
 
 /// Handles passkey validation, rate limiting, and failed attempt logging.
 class TerminalSecurityService {
-  static const String _passkey = '190308';
+  String get _fallbackPasskey => AppConfig.adminTerminalPasskey;
   static const int _maxAttempts = 5;
   static const int _cooldownMinutes = 5;
 
@@ -16,11 +17,33 @@ class TerminalSecurityService {
 
   /// Returns null on success, or an error message string on failure.
   Future<String?> validatePasskey(String enteredPasskey) async {
+    if (!AppConfig.adminToolsEnabled) {
+      return 'ACCESS DENIED\nAdmin terminal disabled.';
+    }
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      return 'ACCESS DENIED\nLogin required.';
+    }
     // Check if currently locked out
     final lockoutError = await _checkLockout();
     if (lockoutError != null) return lockoutError;
 
-    if (enteredPasskey == _passkey) {
+    final isAdmin = await _isAdmin(user.id);
+    if (!isAdmin) {
+      return 'ACCESS DENIED\nAdmin role required.';
+    }
+
+    final dbPasskey = await _fetchPasskeyFromSupabase();
+    final resolvedPasskey =
+        (dbPasskey != null && dbPasskey.isNotEmpty)
+            ? dbPasskey
+            : _fallbackPasskey;
+
+    if (resolvedPasskey.isEmpty) {
+      return 'ACCESS DENIED\nAdmin passkey not configured.';
+    }
+
+    if (enteredPasskey == resolvedPasskey) {
       // Reset attempts on success
       await _resetAttempts();
       return null; // success
@@ -37,6 +60,33 @@ class TerminalSecurityService {
     }
 
     return 'ACCESS DENIED\nInvalid passkey\n($remaining attempts remaining)';
+  }
+
+  Future<bool> _isAdmin(String userId) async {
+    try {
+      final res = await _supabase
+          .from('users')
+          .select('role')
+          .eq('id', userId)
+          .single();
+      return res['role'] == 'admin';
+    } catch (e) {
+      debugPrint('Error checking admin role: $e');
+      return false;
+    }
+  }
+
+  Future<String?> _fetchPasskeyFromSupabase() async {
+    try {
+      final res = await _supabase
+          .from('admin_passcode')
+          .select('passcode')
+          .maybeSingle();
+      return res?['passcode'] as String?;
+    } catch (e) {
+      debugPrint('Error fetching admin passkey: $e');
+      return null;
+    }
   }
 
   /// Check if the user is currently locked out.
@@ -90,7 +140,9 @@ class TerminalSecurityService {
       final user = _supabase.auth.currentUser;
       await _supabase.from('failed_admin_access_logs').insert({
         'device_id': user?.id ?? 'unknown',
-        'entered_passkey': enteredPasskey,
+        'entered_passkey': enteredPasskey.isEmpty
+            ? ''
+            : 'redacted(${enteredPasskey.length})',
         'ip_address': null, // IP not directly accessible from Flutter client
         'user_id': user?.id,
       });

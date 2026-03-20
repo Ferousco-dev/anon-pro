@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/user_model.dart';
 import '../../models/chat_model.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../main.dart';
 import 'conversation_screen.dart';
 
@@ -182,7 +183,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to start conversation: ${e.toString()}'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
           ),
         );

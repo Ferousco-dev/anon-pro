@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../models/user_model.dart';
 import '../../main.dart';
+import '../../services/notification_service.dart';
 import 'profile_screen.dart';
 
 class FollowersListScreen extends StatefulWidget {
@@ -86,7 +88,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = AppErrorHandler.userMessage(e);
           _isLoading = false;
         });
       }
@@ -464,11 +466,23 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
             .delete()
             .eq('follower_id', currentUser.id)
             .eq('following_id', user.id);
+        try {
+          await NotificationService().unsubscribeFromFollowersTopic(user.id);
+        } catch (e) {
+          debugPrint(
+              'Failed to unsubscribe from followers topic for ${user.id}: $e');
+        }
       } else {
         await supabase.from('follows').insert({
           'follower_id': currentUser.id,
           'following_id': user.id,
         });
+        try {
+          await NotificationService().subscribeToFollowersTopic(user.id);
+        } catch (e) {
+          debugPrint(
+              'Failed to subscribe to followers topic for ${user.id}: $e');
+        }
       }
 
       if (mounted) {

@@ -51,7 +51,7 @@ class StatusMediaCache {
       }
 
       // Download the file
-      debugPrint('Downloading status media from: $mediaUrl');
+      debugPrint('Downloading status media');
       final response = await http.get(Uri.parse(mediaUrl)).timeout(
             const Duration(minutes: 5),
             onTimeout: () => throw TimeoutException('Download timeout'),
@@ -67,7 +67,7 @@ class StatusMediaCache {
       // Store timestamp
       await _setCacheTimestamp(fileName);
 
-      debugPrint('Cached media at: ${cachedFile.path}');
+      debugPrint('Cached status media');
       return cachedFile;
     } catch (e) {
       debugPrint('Error downloading and caching media: $e');

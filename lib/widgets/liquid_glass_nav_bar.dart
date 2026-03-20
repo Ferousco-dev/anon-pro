@@ -8,12 +8,14 @@ class LiquidGlassNavBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
   final String? profileImageUrl;
+  final bool showInboxDot;
 
   const LiquidGlassNavBar({
     super.key,
     required this.selectedIndex,
     required this.onTap,
     this.profileImageUrl,
+    this.showInboxDot = false,
   });
 
   @override
@@ -29,10 +31,6 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   // Controls the bubble scale pop when switching tabs
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
-
-  // Glow pulse animation (subtle looping)
-  late AnimationController _glowController;
-  late Animation<double> _glowAnimation;
 
   // Tab press scale animation
   late AnimationController _tapController;
@@ -52,14 +50,14 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
     // Slide controller — spring-like animation for bubble position
     _slideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 360),
     );
     _slideAnimation = Tween<double>(
       begin: widget.selectedIndex.toDouble(),
       end: widget.selectedIndex.toDouble(),
     ).animate(CurvedAnimation(
       parent: _slideController,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
 
     // Scale controller — pops the bubble when changing tabs
@@ -68,22 +66,13 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
       duration: const Duration(milliseconds: 350),
     );
     _scaleAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.75), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 0.75, end: 1.12), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.12, end: 1.0), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.96), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.96, end: 1.03), weight: 45),
+      TweenSequenceItem(tween: Tween(begin: 1.03, end: 1.0), weight: 30),
     ]).animate(CurvedAnimation(
       parent: _scaleController,
       curve: Curves.easeOutCubic,
     ));
-
-    // Glow pulse — subtle continuous glow on the active bubble
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-    _glowAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
 
     // Tap scale — quick pop on press
     _tapController = AnimationController(
@@ -91,8 +80,8 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
       duration: const Duration(milliseconds: 150),
     );
     _tapAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.25), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.25, end: 1.0), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.05), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.05, end: 1.0), weight: 50),
     ]).animate(CurvedAnimation(
       parent: _tapController,
       curve: Curves.easeOut,
@@ -109,7 +98,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
         end: widget.selectedIndex.toDouble(),
       ).animate(CurvedAnimation(
         parent: _slideController,
-        curve: Curves.easeOutBack,
+        curve: Curves.easeOutCubic,
       ));
       _slideController.forward(from: 0);
       _scaleController.forward(from: 0);
@@ -120,7 +109,6 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   void dispose() {
     _slideController.dispose();
     _scaleController.dispose();
-    _glowController.dispose();
     _tapController.dispose();
     super.dispose();
   }
@@ -157,24 +145,12 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
                     Colors.white.withOpacity(0.03),
                   ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.4),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                boxShadow: const [],
               ),
               child: AnimatedBuilder(
                 animation: Listenable.merge([
                   _slideAnimation,
                   _scaleAnimation,
-                  _glowAnimation,
                   _tapAnimation,
                 ]),
                 builder: (context, _) {
@@ -220,50 +196,28 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
               height: bubbleHeight,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
-                color: Colors.white.withOpacity(0.10),
+                color: Colors.white.withOpacity(0.08),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.26),
-                  width: 1.0,
+                  color: Colors.white.withOpacity(0.22),
+                  width: 0.9,
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.white.withOpacity(0.20),
+                    Colors.white.withOpacity(0.18),
                     Colors.white.withOpacity(0.04),
                   ],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                  BoxShadow(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.black.withOpacity(0.12),
                     blurRadius: 10,
-                    spreadRadius: -2,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: Align(
-                alignment: const Alignment(0.7, -0.7),
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF34C759),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF34C759).withOpacity(0.6),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: const SizedBox.shrink(),
             ),
           ),
         ),
@@ -342,16 +296,42 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   }
 
   Widget _buildIconContent(int index, bool isSelected, double opacity) {
+    final showDot = index == 2 && widget.showInboxDot;
+
     // Profile tab (index 3) — show avatar
     if (index == 3) {
       return _buildProfileIcon(isSelected, opacity);
     }
 
     // For other tabs, use the custom painted icons
-    return _LiquidNavIcon(
+    final icon = _LiquidNavIcon(
       index: _iconIndices[index],
       isSelected: isSelected,
       color: Colors.white.withOpacity(opacity),
+    );
+    if (!showDot) return icon;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        icon,
+        Positioned(
+          right: -1,
+          top: -1,
+          child: Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E88E5),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.black,
+                width: 1,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -370,15 +350,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
               : Colors.white.withOpacity(0.25),
           width: isSelected ? 2.0 : 1.2,
         ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.2),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
+        boxShadow: const [],
       ),
       child: ClipOval(
         child: hasImage

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../main.dart';
 import '../../models/post_model.dart';
 import '../../models/user_model.dart';
@@ -10,6 +11,7 @@ import '../../widgets/post_card.dart';
 import '../../widgets/edit_post_sheet.dart';
 import '../../widgets/profile_skeleton_loader.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_dm_launcher.dart';
 import '../../models/user_analytics_model.dart';
@@ -268,7 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppErrorHandler.userMessage(e);
         _isLoading = false;
       });
     }
@@ -314,6 +316,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .delete()
             .eq('follower_id', currentUser.id)
             .eq('following_id', widget.userId);
+        try {
+          await NotificationService()
+              .unsubscribeFromFollowersTopic(widget.userId);
+        } catch (e) {
+          debugPrint(
+              'Failed to unsubscribe from followers topic for ${widget.userId}: $e');
+        }
 
         if (mounted) {
           setState(() {
@@ -331,6 +340,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'follower_id': currentUser.id,
           'following_id': widget.userId,
         });
+        try {
+          await NotificationService()
+              .subscribeToFollowersTopic(widget.userId);
+        } catch (e) {
+          debugPrint(
+              'Failed to subscribe to followers topic for ${widget.userId}: $e');
+        }
 
         if (mounted) {
           setState(() {
@@ -1281,7 +1297,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Delete account?',
             style: TextStyle(color: Colors.white)),
         content: const Text(
-          'This cannot be undone.',
+          'Are you sure you want to delete your account? This action cannot be undone.',
           style: TextStyle(color: AppConstants.textSecondary),
         ),
         actions: [
@@ -1303,20 +1319,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppConstants.primaryBlue),
+      ),
+    );
     try {
       setState(() => _isSaving = true);
 
       await supabase.rpc('delete_user');
 
       if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
       await supabase.auth.signOut();
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/login');
     } catch (e) {
       if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to delete account: $e'),
+          content: Text(AppErrorHandler.userMessage(e)),
           backgroundColor: AppConstants.red,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -1343,303 +1369,420 @@ class _ProfileScreenState extends State<ProfileScreen> {
         TextEditingController(text: _user!.customEmoji ?? '');
     final themeOptions = ['blue', 'gold', 'green', 'red', 'teal'];
     String selectedTheme = _user!.profileTheme ?? 'blue';
+    bool isSavingLocal = false;
+    bool isUploadingPhoto = false;
+    bool isUploadingBanner = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppConstants.darkGray,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-        return SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: bottomInset,
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    // keep a max height so it can scroll when keyboard is open
-                    maxHeight: constraints.maxHeight * 0.9,
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> handlePhoto() async {
+              if (isUploadingPhoto) return;
+              setSheetState(() => isUploadingPhoto = true);
+              await _pickAndUploadProfileImage();
+              if (mounted) {
+                setSheetState(() => isUploadingPhoto = false);
+              }
+            }
+
+            Future<void> handleBanner() async {
+              if (isUploadingBanner) return;
+              setSheetState(() => isUploadingBanner = true);
+              await _pickAndUploadCoverImage();
+              if (mounted) {
+                setSheetState(() => isUploadingBanner = false);
+              }
+            }
+
+            Future<void> handleSave() async {
+              if (isSavingLocal) return;
+              setSheetState(() => isSavingLocal = true);
+
+              final newAlias = aliasController.text.trim();
+              final newName = displayNameController.text.trim();
+              final newBio = bioController.text.trim();
+
+              if (newAlias.isEmpty) {
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(content: Text('Username cannot be empty')),
+                );
+                setSheetState(() => isSavingLocal = false);
+                return;
+              }
+
+              if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(newAlias)) {
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                      content: Text(
+                          'Username can only contain letters, numbers and underscores')),
+                );
+                setSheetState(() => isSavingLocal = false);
+                return;
+              }
+
+              final saved = await _saveProfileEdits(
+                alias: newAlias,
+                displayName: newName.isEmpty ? null : newName,
+                bio: newBio.isEmpty ? null : newBio,
+                profileTheme: _user!.isVerifiedUser ? selectedTheme : null,
+                customEmoji: _user!.isVerifiedUser
+                    ? emojiController.text.trim()
+                    : null,
+                profileLink:
+                    _user!.isVerifiedUser ? linkController.text.trim() : null,
+                dmPrivacy: _user!.isVerifiedUser ? dmPrivacy : null,
+              );
+
+              if (mounted) {
+                setSheetState(() => isSavingLocal = false);
+                if (saved) {
+                  Navigator.pop(context);
+                }
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: bottomInset),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppConstants.black,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(24)),
+                    border: Border.all(color: AppConstants.dividerColor),
                   ),
-                  child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.92,
+                    ),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'Edit Profile',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                        const SizedBox(height: 10),
+                        Container(
+                          width: 48,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: AppConstants.lightGray,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Edit profile',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
-                            ),
-                            TextButton(
-                              onPressed: _isSaving
-                                  ? null
-                                  : () async {
-                                      await _pickAndUploadProfileImage();
-                                    },
-                              child: const Text('Change Photo'),
-                            ),
-                          ],
+                              IconButton(
+                                onPressed: isSavingLocal
+                                    ? null
+                                    : () => Navigator.pop(context),
+                                icon: const Icon(Icons.close_rounded,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
                         ),
-                        if (_user!.isVerifiedUser)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed:
-                                  _isSaving || _isUploadingCoverImage
-                                      ? null
-                                      : () async {
-                                          await _pickAndUploadCoverImage();
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            isSavingLocal || isUploadingPhoto
+                                                ? null
+                                                : handlePhoto,
+                                        icon: isUploadingPhoto
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor:
+                                                      AlwaysStoppedAnimation<
+                                                              Color>(
+                                                          AppConstants
+                                                              .primaryBlue),
+                                                ),
+                                              )
+                                            : const Icon(
+                                                Icons.camera_alt_outlined),
+                                        label: const Text('Change photo'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          side: const BorderSide(
+                                              color: AppConstants.dividerColor),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    if (_user!.isVerifiedUser) ...[
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: OutlinedButton.icon(
+                                          onPressed: isSavingLocal ||
+                                                  isUploadingBanner
+                                              ? null
+                                              : handleBanner,
+                                          icon: isUploadingBanner
+                                              ? const SizedBox(
+                                                  width: 14,
+                                                  height: 14,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                                Color>(
+                                                            AppConstants
+                                                                .primaryBlue),
+                                                  ),
+                                                )
+                                              : const Icon(Icons.image_outlined),
+                                          label: const Text('Change banner'),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.white,
+                                            side: const BorderSide(
+                                                color:
+                                                    AppConstants.dividerColor),
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 12),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditSection(
+                                  'Basics',
+                                  [
+                                    _buildTextField(
+                                        'Full name', displayNameController,
+                                        maxLength: 40),
+                                    const SizedBox(height: 12),
+                                    _buildTextField(
+                                        'Username', aliasController,
+                                        maxLength: 20, prefixText: '@'),
+                                    const SizedBox(height: 12),
+                                    _buildTextField('Bio', bioController,
+                                        maxLength: AppConstants.maxBioLength,
+                                        maxLines: 4),
+                                  ],
+                                ),
+                                if (_user!.isVerifiedUser) ...[
+                                  const SizedBox(height: 12),
+                                  _buildEditSection(
+                                    'Links & privacy',
+                                    [
+                                      _buildTextField(
+                                        'Profile link',
+                                        linkController,
+                                        maxLength: 120,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildFieldLabel('DM privacy'),
+                                      const SizedBox(height: 8),
+                                      DropdownButtonFormField<String>(
+                                        value: dmPrivacy,
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'everyone',
+                                            child: Text('Everyone'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'verified_only',
+                                            child:
+                                                Text('Verified users only'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'followers_only',
+                                            child: Text('Followers only'),
+                                          ),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value == null) return;
+                                          dmPrivacy = value;
                                         },
-                              child: _isUploadingCoverImage
+                                        dropdownColor: AppConstants.darkGray,
+                                        decoration: _buildInputDecoration(),
+                                        style: const TextStyle(
+                                            color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildEditSection(
+                                    'Verified style',
+                                    [
+                                      _buildTextField(
+                                        'Custom emoji',
+                                        emojiController,
+                                        maxLength: 2,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildFieldLabel('Profile theme'),
+                                      const SizedBox(height: 8),
+                                      DropdownButtonFormField<String>(
+                                        value: selectedTheme,
+                                        items: themeOptions
+                                            .map(
+                                              (t) => DropdownMenuItem(
+                                                value: t,
+                                                child: Text(
+                                                  t.toUpperCase(),
+                                                  style: const TextStyle(
+                                                      color: Colors.white),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (value) {
+                                          if (value == null) return;
+                                          selectedTheme = value;
+                                        },
+                                        dropdownColor: AppConstants.darkGray,
+                                        decoration: _buildInputDecoration(),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppConstants.primaryBlue,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: isSavingLocal ? null : handleSave,
+                              child: isSavingLocal
                                   ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
+                                      width: 20,
+                                      height: 20,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                                AppConstants.primaryBlue),
+                                                Colors.white),
                                       ),
                                     )
-                                  : const Text('Change Banner'),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        _buildTextField('Full name', displayNameController,
-                            maxLength: 40),
-                        const SizedBox(height: 12),
-                        _buildTextField('Username', aliasController,
-                            maxLength: 20, prefixText: '@'),
-                        const SizedBox(height: 12),
-                          _buildTextField('Bio', bioController,
-                              maxLength: AppConstants.maxBioLength, maxLines: 4),
-                        if (_user!.isVerifiedUser) ...[
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            'Profile link',
-                            linkController,
-                            maxLength: 120,
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'DM Privacy',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: dmPrivacy,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'everyone',
-                                child: Text('Everyone'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'verified_only',
-                                child: Text('Verified users only'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'followers_only',
-                                child: Text('Followers only'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value == null) return;
-                              dmPrivacy = value;
-                            },
-                            dropdownColor: AppConstants.darkGray,
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: AppConstants.mediumGray,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide:
-                                    BorderSide(color: Colors.grey[800]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide:
-                                    BorderSide(color: Colors.grey[800]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                    color: AppConstants.primaryBlue),
-                              ),
-                            ),
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ],
-                        if (_user!.isVerifiedUser) ...[
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Verified Customization',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            'Custom emoji',
-                            emojiController,
-                            maxLength: 2,
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Profile theme',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: selectedTheme,
-                            items: themeOptions
-                                .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t,
-                                    child: Text(
-                                      t.toUpperCase(),
-                                      style:
-                                          const TextStyle(color: Colors.white),
+                                  : const Text(
+                                      'Save changes',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800),
                                     ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              selectedTheme = value;
-                            },
-                            dropdownColor: AppConstants.darkGray,
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: AppConstants.mediumGray,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide:
-                                    BorderSide(color: Colors.grey[800]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide:
-                                    BorderSide(color: Colors.grey[800]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                    color: AppConstants.primaryBlue),
-                              ),
                             ),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppConstants.primaryBlue,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: _isSaving
-                                ? null
-                                : () async {
-                                    final newAlias =
-                                        aliasController.text.trim();
-                                    final newName =
-                                        displayNameController.text.trim();
-                                    final newBio = bioController.text.trim();
-
-                                    if (newAlias.isEmpty) {
-                                      ScaffoldMessenger.of(this.context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'Username cannot be empty')),
-                                      );
-                                      return;
-                                    }
-
-                                    if (!RegExp(r'^[a-zA-Z0-9_]+$')
-                                        .hasMatch(newAlias)) {
-                                      ScaffoldMessenger.of(this.context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'Username can only contain letters, numbers and underscores')),
-                                      );
-                                      return;
-                                    }
-
-                                    await _saveProfileEdits(
-                                      alias: newAlias,
-                                      displayName:
-                                          newName.isEmpty ? null : newName,
-                                      bio: newBio.isEmpty ? null : newBio,
-                                      profileTheme: _user!.isVerifiedUser
-                                          ? selectedTheme
-                                          : null,
-                                      customEmoji: _user!.isVerifiedUser
-                                          ? emojiController.text.trim()
-                                          : null,
-                                      profileLink: _user!.isVerifiedUser
-                                          ? linkController.text.trim()
-                                          : null,
-                                      dmPrivacy:
-                                          _user!.isVerifiedUser ? dmPrivacy : null,
-                                    );
-
-                                    if (mounted) {
-                                      Navigator.pop(context);
-                                    }
-                                  },
-                            child: _isSaving
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white),
-                                    ),
-                                  )
-                                : const Text(
-                                    'Save',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w800),
-                                  ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildEditSection(String title, List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppConstants.darkGray,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppConstants.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppConstants.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AppConstants.textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.2,
+      ),
+    );
+  }
+
+  InputDecoration _buildInputDecoration({String? prefixText}) {
+    return InputDecoration(
+      counterStyle: const TextStyle(color: AppConstants.textSecondary),
+      prefixText: prefixText,
+      prefixStyle: const TextStyle(color: AppConstants.textSecondary),
+      hintStyle: const TextStyle(color: AppConstants.textTertiary),
+      filled: true,
+      fillColor: AppConstants.mediumGray.withOpacity(0.75),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppConstants.dividerColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppConstants.dividerColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppConstants.primaryBlue),
+      ),
     );
   }
 
@@ -1653,42 +1796,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style:
-              const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
+        _buildFieldLabel(label),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           maxLength: maxLength,
           maxLines: maxLines,
           style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            counterStyle: const TextStyle(color: AppConstants.textSecondary),
-            prefixText: prefixText,
-            prefixStyle: const TextStyle(color: AppConstants.textSecondary),
-            filled: true,
-            fillColor: AppConstants.mediumGray,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[800]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[800]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppConstants.primaryBlue),
-            ),
-          ),
+          decoration: _buildInputDecoration(prefixText: prefixText),
         ),
       ],
     );
   }
 
-  Future<void> _saveProfileEdits({
+  Future<bool> _saveProfileEdits({
     required String alias,
     String? displayName,
     String? bio,
@@ -1723,8 +1844,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
       await _loadProfile();
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to update profile: $e'),
@@ -1735,6 +1857,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           margin: const EdgeInsets.all(20),
         ),
       );
+      return false;
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

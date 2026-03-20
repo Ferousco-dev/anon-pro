@@ -1,0 +1,5 @@
+[functions.password-reset-otp-request]
+verify_jwt = false
+
+[functions.password-reset-otp-verify]
+verify_jwt = false

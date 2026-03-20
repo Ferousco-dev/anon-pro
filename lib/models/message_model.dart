@@ -1,3 +1,5 @@
+enum MessageDeliveryStatus { sending, sent, read, failed }
+
 class MessageModel {
   final String id;
   final String conversationId;
@@ -19,6 +21,7 @@ class MessageModel {
   final List<String> mentions; // user IDs mentioned
   final bool isSystemMessage;
   final Map<String, List<String>> reactions; // emoji -> list of user IDs
+  final MessageDeliveryStatus deliveryStatus;
 
   MessageModel({
     required this.id,
@@ -39,6 +42,7 @@ class MessageModel {
     this.mentions = const [],
     this.isSystemMessage = false,
     this.reactions = const {},
+    this.deliveryStatus = MessageDeliveryStatus.sent,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +76,7 @@ class MessageModel {
           : [],
       isSystemMessage: json['is_system_message'] as bool? ?? false,
       reactions: parsedReactions,
+      deliveryStatus: MessageDeliveryStatus.sent,
     );
   }
 
@@ -111,6 +116,7 @@ class MessageModel {
     List<String>? mentions,
     bool? isSystemMessage,
     Map<String, List<String>>? reactions,
+    MessageDeliveryStatus? deliveryStatus,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -132,6 +138,7 @@ class MessageModel {
       mentions: mentions ?? this.mentions,
       isSystemMessage: isSystemMessage ?? this.isSystemMessage,
       reactions: reactions ?? this.reactions,
+      deliveryStatus: deliveryStatus ?? this.deliveryStatus,
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/constants.dart';
+import '../../services/notification_service.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   final String userId;
@@ -30,6 +31,8 @@ class _NotificationSettingsScreenState
   bool _previewEnabled = true;
   TimeOfDay? _quietStart;
   TimeOfDay? _quietEnd;
+  bool _dailyMotivationEnabled = true;
+  bool _inactivityEnabled = true;
 
   @override
   void initState() {
@@ -43,9 +46,13 @@ class _NotificationSettingsScreenState
     final startMinutes = prefs.getInt('notif_quiet_start');
     final endMinutes = prefs.getInt('notif_quiet_end');
     final preview = prefs.getBool('notif_preview_enabled');
+    final dailyMotivation = prefs.getBool('notif_daily_motivation_enabled');
+    final inactivityEnabled = prefs.getBool('notif_inactivity_enabled');
 
     setState(() {
       _previewEnabled = preview ?? true;
+      _dailyMotivationEnabled = dailyMotivation ?? true;
+      _inactivityEnabled = inactivityEnabled ?? true;
       if (startMinutes != null && endMinutes != null) {
         _quietStart = TimeOfDay(
           hour: startMinutes ~/ 60,
@@ -74,6 +81,20 @@ class _NotificationSettingsScreenState
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notif_preview_enabled', value);
     setState(() => _previewEnabled = value);
+  }
+
+  Future<void> _setDailyMotivationEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notif_daily_motivation_enabled', value);
+    setState(() => _dailyMotivationEnabled = value);
+    await NotificationService().scheduleDailyMotivation();
+  }
+
+  Future<void> _setInactivityEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notif_inactivity_enabled', value);
+    setState(() => _inactivityEnabled = value);
+    await NotificationService().scheduleInactivityReminderFromPrefs();
   }
 
   Future<void> _loadSettings() async {
@@ -161,7 +182,18 @@ class _NotificationSettingsScreenState
                   _previewEnabled,
                   (v) => _setPreviewEnabled(v),
                 ),
+                _buildToggle(
+                  'Daily motivation at 8 PM',
+                  _dailyMotivationEnabled,
+                  (v) => _setDailyMotivationEnabled(v),
+                ),
+                _buildToggle(
+                  'Remind me after 7 days inactive',
+                  _inactivityEnabled,
+                  (v) => _setInactivityEnabled(v),
+                ),
                 _buildQuietHoursCard(),
+                _buildTestNotificationCard(),
                 const SizedBox(height: 16),
                 _buildSectionTitle('Notification Types'),
                 _buildToggle(
@@ -175,9 +207,11 @@ class _NotificationSettingsScreenState
                 _buildToggle(
                   'New posts',
                   _newPost,
-                  (v) {
+                  (v) async {
                     setState(() => _newPost = v);
-                    _updateSetting('notify_new_post', v);
+                    await _updateSetting('notify_new_post', v);
+                    await NotificationService()
+                        .setNewPostNotificationsEnabled(v);
                   },
                 ),
                 _buildToggle(
@@ -285,6 +319,53 @@ class _NotificationSettingsScreenState
           );
           if (end == null) return;
           await _saveQuietHours(start: start, end: end);
+        },
+      ),
+    );
+  }
+
+  Widget _buildTestNotificationCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppConstants.darkGray,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppConstants.lightGray.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: ListTile(
+        title: const Text('Test local notification',
+            style: TextStyle(color: Colors.white)),
+        subtitle: const Text(
+          'Sends a local notification immediately',
+          style: TextStyle(color: AppConstants.textSecondary),
+        ),
+        trailing: const Icon(Icons.notifications_active,
+            color: Colors.white70),
+        onTap: () async {
+          try {
+            await NotificationService().showNotification(
+              title: 'AnonPro test',
+              body: 'This is a local test notification.',
+            );
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Test notification sent'),
+                backgroundColor: AppConstants.primaryBlue,
+              ),
+            );
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to send test notification: $e'),
+                backgroundColor: AppConstants.red,
+              ),
+            );
+          }
         },
       ),
     );

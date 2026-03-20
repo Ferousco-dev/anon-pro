@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Supabase client
@@ -127,7 +128,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update setting: $e'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
           ),
         );
@@ -179,7 +180,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       }
     } catch (e) {
       debugPrint('Error updating streak requirements: $e');
-      _showError('Failed to update streak requirements: $e');
+      _showError(AppErrorHandler.userMessage(e));
     }
   }
 
@@ -206,7 +207,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         );
       }
     } catch (e) {
-      _showError('Failed to update moderation settings: $e');
+      _showError(AppErrorHandler.userMessage(e));
     }
   }
 
@@ -239,7 +240,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         );
       }
     } catch (e) {
-      _showError('Failed to update rate limits: $e');
+      _showError(AppErrorHandler.userMessage(e));
     }
   }
 

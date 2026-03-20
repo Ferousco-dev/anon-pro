@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:anonpro/utils/error_sanitizer.dart';
 
 class ErrorReportingService {
   ErrorReportingService._();
@@ -8,7 +9,6 @@ class ErrorReportingService {
   static final ErrorReportingService _instance = ErrorReportingService._();
   static ErrorReportingService get instance => _instance;
 
-  final SupabaseClient _client = Supabase.instance.client;
   bool _initialized = false;
 
   void init() {
@@ -16,7 +16,9 @@ class ErrorReportingService {
     _initialized = true;
 
     FlutterError.onError = (FlutterErrorDetails details) {
-      FlutterError.presentError(details);
+      if (kDebugMode) {
+        FlutterError.presentError(details);
+      }
       unawaited(_report(
         error: details.exception,
         stack: details.stack,
@@ -48,13 +50,16 @@ class ErrorReportingService {
     String? context,
   }) async {
     try {
-      await _client.from('client_error_logs').insert({
-        'user_id': _client.auth.currentUser?.id,
-        'message': error.toString(),
-        'stack': stack?.toString(),
-        'context': context,
+      final client = Supabase.instance.client;
+      await client.from('client_error_logs').insert({
+        'user_id': client.auth.currentUser?.id,
+        'message': ErrorSanitizer.sanitizeError(error),
+        'stack': ErrorSanitizer.sanitizeStack(stack),
+        'context': context == null ? null : ErrorSanitizer.sanitize(context),
         'platform': defaultTargetPlatform.name,
       });
+    } on AssertionError {
+      // Supabase not initialized yet; skip remote error reporting.
     } catch (_) {
       // Avoid crashing on error logging failures.
     }

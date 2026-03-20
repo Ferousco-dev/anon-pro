@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../models/post_model.dart';
 import '../../models/user_model.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../services/notification_service.dart';
 import '../../services/image_upload_service.dart';
 import '../../widgets/post_card.dart';
@@ -249,8 +250,34 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => CreatePostSheet(
         currentUser: _currentUser!,
-        onPostCreated: () {
-          _loadPosts();
+        onOptimisticPost: (optimisticPost) {
+          if (!mounted) return;
+          setState(() {
+            _posts.insert(0, optimisticPost);
+          });
+          // Scroll to top to show the new post
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        },
+        onPostCreated: (createdPost, optimisticId) {
+          if (!mounted) return;
+          setState(() {
+            if (optimisticId != null) {
+              final idx = _posts.indexWhere((p) => p.id == optimisticId);
+              if (idx != -1) {
+                _posts[idx] = createdPost;
+              } else {
+                _posts.insert(0, createdPost);
+              }
+            } else {
+              _posts.insert(0, createdPost);
+            }
+          });
         },
       ),
     );
@@ -258,6 +285,16 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _showComments(PostModel post) {
     if (_currentUser == null) return;
+    if (post.id.startsWith('optimistic_')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Still posting. Try again in a moment.'),
+          backgroundColor: AppConstants.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -334,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen>
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed to share: ${e.toString()}'),
+                              content: Text(AppErrorHandler.userMessage(e)),
                               backgroundColor: Color(0xFFFF3B30),
                               behavior: SnackBarBehavior.floating,
                             ),

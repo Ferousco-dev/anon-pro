@@ -84,7 +84,7 @@ BEGIN
   SELECT rate_limit_rooms_per_hour INTO v_limit
   FROM public.app_settings WHERE id = 1;
   IF v_limit IS NULL THEN v_limit := 3; END IF;
-  PERFORM public.apply_rate_limit(NEW.created_by, 'room', v_limit, 3600);
+  PERFORM public.apply_rate_limit(NEW.creator_id, 'room', v_limit, 3600);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -18,6 +18,7 @@ class AdminUserAnalyticsScreen extends StatefulWidget {
 class _AdminUserAnalyticsScreenState extends State<AdminUserAnalyticsScreen> {
   late Future<AdminUserStats> _statsFuture;
   final ScreenshotController _shareController = ScreenshotController();
+  final GlobalKey _shareCardKey = GlobalKey();
 
   @override
   void initState() {
@@ -47,9 +48,16 @@ class _AdminUserAnalyticsScreenState extends State<AdminUserAnalyticsScreen> {
       final file =
           File('${dir.path}/anonpro_analytics_${DateTime.now().millisecondsSinceEpoch}.png');
       await file.writeAsBytes(image);
+
+      final box = _shareCardKey.currentContext?.findRenderObject() as RenderBox?;
+      final origin = box != null
+          ? box.localToGlobal(Offset.zero) & box.size
+          : null;
+
       await Share.shareXFiles(
         [XFile(file.path)],
         text: 'AnonPro — User Analytics Snapshot',
+        sharePositionOrigin: origin,
       );
     } catch (e) {
       if (!mounted) return;
@@ -97,11 +105,16 @@ class _AdminUserAnalyticsScreenState extends State<AdminUserAnalyticsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildRangeSelector(),
-              const SizedBox(height: 12),
-              _buildExportRow(stats),
-              const SizedBox(height: 16),
-              _buildHeroCard(stats),
+          _buildRangeSelector(),
+          const SizedBox(height: 12),
+          _buildExportRow(stats),
+          const SizedBox(height: 12),
+          Screenshot(
+            controller: _shareController,
+            child: _buildShareCard(stats),
+          ),
+          const SizedBox(height: 16),
+          _buildHeroCard(stats),
               const SizedBox(height: 16),
               _buildMetricsGrid(stats),
               const SizedBox(height: 16),
@@ -383,6 +396,7 @@ class _AdminUserAnalyticsScreenState extends State<AdminUserAnalyticsScreen> {
         ? stats.dailyNewUsers.last
         : 0;
     return Container(
+      key: _shareCardKey,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppGradients.bluePurple,

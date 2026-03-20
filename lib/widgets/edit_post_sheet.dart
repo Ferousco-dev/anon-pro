@@ -7,6 +7,7 @@ import '../main.dart';
 import '../models/post_model.dart';
 import '../utils/constants.dart';
 import '../services/image_upload_service.dart';
+import '../utils/app_error_handler.dart';
 
 class EditPostSheet extends StatefulWidget {
   final PostModel post;
@@ -131,7 +132,7 @@ class _EditPostSheetState extends State<EditPostSheet> {
         );
       }
     } catch (e) {
-      _showError('Failed to update post: ${e.toString()}');
+      _showError(AppErrorHandler.userMessage(e));
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

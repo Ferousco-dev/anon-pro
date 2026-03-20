@@ -35,7 +35,10 @@ CREATE POLICY "notification_settings_update"
   WITH CHECK (auth.uid() = user_id);
 
 CREATE OR REPLACE FUNCTION public.can_notify(p_user_id UUID, p_type TEXT)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public AS $$
 DECLARE
   s public.notification_settings;
 BEGIN
@@ -58,7 +61,7 @@ BEGIN
     ELSE RETURN TRUE;
   END CASE;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 CREATE OR REPLACE FUNCTION public.notify_user(
   p_user_id UUID,
@@ -66,9 +69,17 @@ CREATE OR REPLACE FUNCTION public.notify_user(
   p_title TEXT,
   p_body TEXT,
   p_data JSONB
-) RETURNS VOID AS $$
+) RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public AS $$
 DECLARE
   v_token TEXT;
+  v_base_url TEXT := 'https://mnfbdrdmqromgfnqetzh.supabase.co';
+  v_anon_key TEXT := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uZmJkcmRtcXJvbWdmbnFldHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3OTczOTIsImV4cCI6MjA4NjM3MzM5Mn0.roYKRHpKi9JrG_2LgGIztRMx_1fZF_0emcyRUd7F7Yg';
+  v_payload JSONB;
+  v_data JSONB;
+  v_data_only BOOLEAN := FALSE;
 BEGIN
   IF NOT public.can_notify(p_user_id, p_type) THEN
     RETURN;
@@ -85,21 +96,36 @@ BEGIN
     RETURN;
   END IF;
 
+  v_data := COALESCE(p_data, '{}'::jsonb) - 'data_only';
+  IF p_data ? 'data_only' THEN
+    v_data_only := (p_data->>'data_only')::boolean;
+  END IF;
+
+  v_payload := jsonb_build_object(
+    'token', v_token,
+    'title', p_title,
+    'body', p_body,
+    'data', v_data,
+    'sound', 'default'
+  );
+
+  IF v_data_only THEN
+    v_payload := v_payload || jsonb_build_object(
+      'data_only', true
+    );
+  END IF;
+
   PERFORM net.http_post(
-    url := 'https://mnfbdrdmqromgfnqetzh.supabase.co/functions/v1/send-notification',
+    url := v_base_url || '/functions/v1/send-notification',
     headers := jsonb_build_object(
-      'Content-Type', 'application/json'
+      'Content-Type', 'application/json',
+      'apikey', v_anon_key,
+      'authorization', 'Bearer ' || v_anon_key
     ),
-    body := jsonb_build_object(
-      'token', v_token,
-      'title', p_title,
-      'body', p_body,
-      'data', p_data,
-      'sound', 'default'
-    )
+    body := v_payload
   );
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Post like notification (anonymous safe)
 CREATE OR REPLACE FUNCTION public.notify_post_like()
@@ -186,9 +212,16 @@ RETURNS TRIGGER AS $$
 DECLARE
   v_participant RECORD;
   v_sender_name TEXT;
+  v_preview TEXT;
+  v_title TEXT;
+  v_body TEXT;
 BEGIN
   SELECT COALESCE(display_name, alias) INTO v_sender_name
   FROM public.users WHERE id = NEW.sender_id;
+
+  v_preview := LEFT(COALESCE(NEW.content, ''), 120);
+  v_title := 'New message';
+  v_body := COALESCE(v_sender_name, 'Someone') || ': ' || v_preview;
 
   FOR v_participant IN
     SELECT user_id FROM public.conversation_participants
@@ -198,9 +231,22 @@ BEGIN
     PERFORM public.notify_user(
       v_participant.user_id,
       'dm_message',
-      'New message',
-      v_sender_name || ': ' || LEFT(NEW.content, 80),
-      jsonb_build_object('type', 'dm', 'conversationId', NEW.conversation_id)
+      v_title,
+      v_body,
+      jsonb_build_object(
+        'type',
+        'dm',
+        'conversationId',
+        NEW.conversation_id,
+        'senderId',
+        NEW.sender_id,
+        'title',
+        v_title,
+        'body',
+        v_body,
+        'data_only',
+        true
+      )
     );
   END LOOP;
 

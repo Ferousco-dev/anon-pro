@@ -3,6 +3,7 @@ class ChatModel {
   final String name;
   final bool isGroup;
   final String? lastMessageContent;
+  final String? lastMessageSenderName;
   final DateTime? lastMessageTime;
   final int unreadCount;
   final String? otherUserId;
@@ -28,6 +29,7 @@ class ChatModel {
     required this.name,
     this.isGroup = false,
     this.lastMessageContent,
+    this.lastMessageSenderName,
     this.lastMessageTime,
     this.unreadCount = 0,
     this.otherUserId,
@@ -53,6 +55,7 @@ class ChatModel {
       name: json['name'] as String? ?? 'Unknown',
       isGroup: json['is_group'] as bool? ?? false,
       lastMessageContent: json['last_message_content'] as String?,
+      lastMessageSenderName: json['last_message_sender_name'] as String?,
       lastMessageTime: json['last_message_time'] != null
           ? DateTime.parse(json['last_message_time'] as String)
           : null,
@@ -85,6 +88,7 @@ class ChatModel {
       'name': name,
       'is_group': isGroup,
       'last_message_content': lastMessageContent,
+      'last_message_sender_name': lastMessageSenderName,
       'last_message_time': lastMessageTime?.toIso8601String(),
       'unread_count': unreadCount,
       'other_user_id': otherUserId,
@@ -110,6 +114,7 @@ class ChatModel {
     String? name,
     bool? isGroup,
     String? lastMessageContent,
+    String? lastMessageSenderName,
     DateTime? lastMessageTime,
     int? unreadCount,
     String? otherUserId,
@@ -133,6 +138,8 @@ class ChatModel {
       name: name ?? this.name,
       isGroup: isGroup ?? this.isGroup,
       lastMessageContent: lastMessageContent ?? this.lastMessageContent,
+      lastMessageSenderName:
+          lastMessageSenderName ?? this.lastMessageSenderName,
       lastMessageTime: lastMessageTime ?? this.lastMessageTime,
       unreadCount: unreadCount ?? this.unreadCount,
       otherUserId: otherUserId ?? this.otherUserId,

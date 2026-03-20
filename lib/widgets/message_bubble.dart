@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/message_model.dart';
-import '../utils/constants.dart';
 import 'forwarded_post_bubble.dart';
+
+const _kTextPrimary = Color(0xFFFFFFFF);
+const _kTextSecondary = Color(0xFF9AA0A6);
+const _kAccent = Color(0xFF1E88E5);
+const _kBubbleSent = Color(0xFF1E88E5);
+const _kBubbleReceived = Color(0xFF141518);
+const _kBubbleBorder = Color(0xFF1F2226);
+const _kActionBg = Color(0xFF0F1114);
+const _kDanger = Color(0xFFFF4D4F);
 
 class MessageBubble extends StatelessWidget {
   final MessageModel message;
@@ -17,6 +25,7 @@ class MessageBubble extends StatelessWidget {
   final Function(MessageModel)? onDelete;
   final Function(MessageModel)? onBlockReport;
   final Function(MessageModel)? onAbout;
+  final Function(MessageModel)? onRetry;
 
   const MessageBubble({
     super.key,
@@ -30,6 +39,7 @@ class MessageBubble extends StatelessWidget {
     this.onDelete,
     this.onBlockReport,
     this.onAbout,
+    this.onRetry,
   });
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,7 +58,7 @@ class MessageBubble extends StatelessWidget {
   void _showDirectMessageActions(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppConstants.darkGray,
+      backgroundColor: _kBubbleReceived,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -63,7 +73,7 @@ class MessageBubble extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppConstants.lightGray,
+                  color: _kBubbleBorder,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -74,7 +84,7 @@ class MessageBubble extends StatelessWidget {
                 _DmActionTile(
                   icon: Icons.delete_outline,
                   label: 'Delete Message',
-                  color: AppConstants.red,
+                  color: _kDanger,
                   onTap: () {
                     Navigator.pop(ctx);
                     onDelete?.call(message);
@@ -88,7 +98,7 @@ class MessageBubble extends StatelessWidget {
                 _DmActionTile(
                   icon: Icons.block,
                   label: 'Block / Report Account',
-                  color: AppConstants.white,
+                  color: _kTextPrimary,
                   onTap: () {
                     Navigator.pop(ctx);
                     onBlockReport?.call(message);
@@ -98,7 +108,7 @@ class MessageBubble extends StatelessWidget {
                 _DmActionTile(
                   icon: Icons.info_outline,
                   label: 'About',
-                  color: AppConstants.white,
+                  color: _kTextPrimary,
                   onTap: () {
                     Navigator.pop(ctx);
                     onAbout?.call(message);
@@ -116,7 +126,7 @@ class MessageBubble extends StatelessWidget {
     const emojis = ['❤️', '😂', '😮', '😢', '😡', '👍', '👎', '🔥'];
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppConstants.darkGray,
+      backgroundColor: _kBubbleReceived,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -129,7 +139,7 @@ class MessageBubble extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppConstants.lightGray,
+                color: _kBubbleBorder,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -146,7 +156,7 @@ class MessageBubble extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppConstants.black,
+                          color: _kActionBg,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child:
@@ -193,10 +203,10 @@ class MessageBubble extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.25),
+        color: _kActionBg,
         borderRadius: BorderRadius.circular(8),
         border: const Border(
-          left: BorderSide(color: AppConstants.primaryBlue, width: 3),
+          left: BorderSide(color: _kAccent, width: 3),
         ),
       ),
       child: Column(
@@ -205,7 +215,7 @@ class MessageBubble extends StatelessWidget {
           Text(
             message.replyToSenderName ?? 'Unknown',
             style: const TextStyle(
-              color: AppConstants.primaryBlue,
+              color: _kAccent,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -214,7 +224,7 @@ class MessageBubble extends StatelessWidget {
           Text(
             message.replyToContent ?? '',
             style: TextStyle(
-              color: AppConstants.white.withOpacity(0.7),
+              color: _kTextSecondary,
               fontSize: 12,
             ),
             maxLines: 2,
@@ -241,14 +251,10 @@ class MessageBubble extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: iReacted
-                    ? AppConstants.primaryBlue.withOpacity(0.3)
-                    : AppConstants.darkGray,
+                color: iReacted ? _kAccent.withOpacity(0.12) : _kActionBg,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: iReacted
-                      ? AppConstants.primaryBlue
-                      : AppConstants.lightGray.withOpacity(0.3),
+                  color: iReacted ? _kAccent : _kBubbleBorder,
                   width: 1,
                 ),
               ),
@@ -260,9 +266,7 @@ class MessageBubble extends StatelessWidget {
                   Text(
                     '${users.length}',
                     style: TextStyle(
-                      color: iReacted
-                          ? AppConstants.primaryBlue
-                          : AppConstants.textSecondary,
+                      color: iReacted ? _kAccent : _kTextSecondary,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -282,13 +286,13 @@ class MessageBubble extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: AppConstants.darkGray.withOpacity(0.6),
+          color: _kActionBg,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           message.content,
           style: const TextStyle(
-            color: AppConstants.textSecondary,
+            color: _kTextSecondary,
             fontSize: 12,
             fontStyle: FontStyle.italic,
           ),
@@ -325,10 +329,10 @@ class MessageBubble extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
                 height: 200,
-                color: AppConstants.lightGray,
+                color: _kActionBg,
                 child: const Center(
                   child: Icon(Icons.broken_image,
-                      color: AppConstants.textSecondary),
+                      color: _kTextSecondary),
                 ),
               ),
             ),
@@ -345,7 +349,7 @@ class MessageBubble extends StatelessWidget {
       return Text(
         message.content,
         style: TextStyle(
-          color: isCurrentUser ? Colors.white : AppConstants.white,
+          color: isCurrentUser ? _kTextPrimary : _kTextPrimary,
           fontSize: 15,
           height: 1.4,
         ),
@@ -359,7 +363,7 @@ class MessageBubble extends StatelessWidget {
         spans.add(TextSpan(
           text: '$word ',
           style: TextStyle(
-            color: isCurrentUser ? Colors.white : AppConstants.primaryBlue,
+            color: isCurrentUser ? _kTextPrimary : _kAccent,
             fontWeight: FontWeight.w700,
             fontSize: 15,
             height: 1.4,
@@ -369,7 +373,7 @@ class MessageBubble extends StatelessWidget {
         spans.add(TextSpan(
           text: '$word ',
           style: TextStyle(
-            color: isCurrentUser ? Colors.white : AppConstants.white,
+            color: isCurrentUser ? _kTextPrimary : _kTextPrimary,
             fontSize: 15,
             height: 1.4,
           ),
@@ -401,7 +405,7 @@ class MessageBubble extends StatelessWidget {
               if (showSenderInfo)
                 CircleAvatar(
                   radius: 16,
-                  backgroundColor: AppConstants.primaryBlue,
+                  backgroundColor: const Color(0xFF1A1D22),
                   backgroundImage: message.senderProfileImageUrl != null
                       ? NetworkImage(message.senderProfileImageUrl!)
                       : null,
@@ -413,7 +417,7 @@ class MessageBubble extends StatelessWidget {
                               .substring(0, 1)
                               .toUpperCase(),
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: _kTextPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -439,7 +443,7 @@ class MessageBubble extends StatelessWidget {
                             message.senderAlias ??
                             'Unknown',
                         style: const TextStyle(
-                          color: AppConstants.textSecondary,
+                          color: _kTextSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -449,15 +453,15 @@ class MessageBubble extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isCurrentUser
-                          ? AppConstants.primaryBlue
-                          : AppConstants.darkGray,
+                      color:
+                          isCurrentUser ? _kBubbleSent : _kBubbleReceived,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(20),
                         topRight: const Radius.circular(20),
                         bottomLeft: Radius.circular(isCurrentUser ? 20 : 4),
                         bottomRight: Radius.circular(isCurrentUser ? 4 : 20),
                       ),
+                      border: Border.all(color: _kBubbleBorder),
                     ),
                     child: _buildMessageContent(),
                   ),
@@ -470,19 +474,13 @@ class MessageBubble extends StatelessWidget {
                         Text(
                           _formatTime(message.createdAt),
                           style: TextStyle(
-                            color: AppConstants.textSecondary.withOpacity(0.7),
+                            color: _kTextSecondary,
                             fontSize: 11,
                           ),
                         ),
                         if (isCurrentUser) ...[
                           const SizedBox(width: 4),
-                          Icon(
-                            message.isRead ? Icons.done_all : Icons.done,
-                            size: 14,
-                            color: message.isRead
-                                ? AppConstants.primaryBlue
-                                : AppConstants.textSecondary.withOpacity(0.7),
-                          ),
+                          _buildDeliveryIcon(context),
                         ],
                       ],
                     ),
@@ -494,6 +492,39 @@ class MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildDeliveryIcon(BuildContext context) {
+    switch (message.deliveryStatus) {
+      case MessageDeliveryStatus.sending:
+        return Icon(
+          Icons.access_time,
+          size: 14,
+          color: _kTextSecondary,
+        );
+      case MessageDeliveryStatus.failed:
+        return GestureDetector(
+          onTap: () => onRetry?.call(message),
+          child: const Icon(
+            Icons.error_outline,
+            size: 14,
+            color: _kDanger,
+          ),
+        );
+      case MessageDeliveryStatus.read:
+        return const Icon(
+          Icons.done_all,
+          size: 14,
+          color: _kAccent,
+        );
+      case MessageDeliveryStatus.sent:
+      default:
+        return Icon(
+          message.isRead ? Icons.done_all : Icons.done,
+          size: 14,
+          color: message.isRead ? _kAccent : _kTextSecondary,
+        );
+    }
   }
 }
 
@@ -520,8 +551,9 @@ class _DmActionTile extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppConstants.black,
+          color: _kActionBg,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kBubbleBorder),
         ),
         child: Row(
           children: [
@@ -564,16 +596,17 @@ class _ActionButton extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppConstants.black,
+              color: _kActionBg,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _kBubbleBorder),
             ),
-            child: Icon(icon, color: AppConstants.white, size: 20),
+            child: Icon(icon, color: _kTextPrimary, size: 20),
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: const TextStyle(
-                color: AppConstants.textSecondary, fontSize: 12),
+                color: _kTextSecondary, fontSize: 12),
           ),
         ],
       ),

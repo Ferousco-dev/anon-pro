@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:anonpro/utils/app_error_handler.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../main.dart';
 import '../models/post_model.dart';
@@ -160,7 +161,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = AppErrorHandler.userMessage(e);
         _isLoading = false;
       });
     }
@@ -184,12 +185,25 @@ class _CommentsSheetState extends State<CommentsSheet> {
     setState(() => _isSending = true);
 
     try {
-      await supabase.from('comments').insert({
-        'post_id': widget.post.id,
-        'user_id': widget.currentUser?.id,
-        'content': text,
-        'is_anonymous': widget.post.isAnonymous,
-      });
+      final inserted = await supabase
+          .from('comments')
+          .insert({
+            'post_id': widget.post.id,
+            'user_id': widget.currentUser?.id,
+            'content': text,
+            'is_anonymous': widget.post.isAnonymous,
+          })
+          .select('''
+            *,
+            user:users!comments_user_id_fkey(
+              id,
+              alias,
+              display_name,
+              avatar_url,
+              profile_image_url
+            )
+          ''')
+          .single();
 
       // Update the post's comment count
       await supabase
@@ -199,6 +213,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
       if (!mounted) return;
       _controller.clear();
+      setState(() {
+        _comments.add(inserted as Map<String, dynamic>);
+        _comments.sort(
+            (a, b) => _parseCreatedAt(a).compareTo(_parseCreatedAt(b)));
+      });
       widget.onCommentCreated?.call();
 
       if (_autoScrollEnabled) {
@@ -241,11 +260,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
             child: Column(
               children: [
                 Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  width: 44,
+                  height: 5,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppConstants.lightGray.withOpacity(0.6),
+                    color: AppConstants.lightGray.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -253,14 +272,39 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppConstants.darkGray,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          color: AppConstants.primaryBlue,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          'Comments (${_comments.length})',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Comments',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              '${_comments.length} total',
+                              style: const TextStyle(
+                                color: AppConstants.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       IconButton(
@@ -270,7 +314,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Expanded(
                   child: _isLoading
                       ? const Center(
@@ -365,12 +409,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
                                     return Padding(
                                       padding:
-                                          const EdgeInsets.only(bottom: 16),
+                                          const EdgeInsets.only(bottom: 14),
                                       child: Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          // User avatar
                                           CircleAvatar(
                                             radius: 16,
                                             backgroundColor:
@@ -386,15 +429,23 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                                   )
                                                 : null,
                                           ),
-                                          const SizedBox(width: 12),
-                                          // Comment content
+                                          const SizedBox(width: 10),
                                           Expanded(
                                             child: Container(
-                                              padding: const EdgeInsets.all(12),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 10),
                                               decoration: BoxDecoration(
-                                                color: AppConstants.darkGray,
+                                                color:
+                                                    AppConstants.darkGray,
                                                 borderRadius:
-                                                    BorderRadius.circular(12),
+                                                    BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: AppConstants
+                                                      .dividerColor
+                                                      .withOpacity(0.5),
+                                                ),
                                               ),
                                               child: Column(
                                                 crossAxisAlignment:
@@ -409,41 +460,41 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                                               const TextStyle(
                                                             color: Colors.white,
                                                             fontWeight:
-                                                                FontWeight.w600,
+                                                                FontWeight.w700,
                                                             fontSize: 14,
                                                           ),
                                                           overflow: TextOverflow
                                                               .ellipsis,
                                                         ),
                                                       ),
-                                                      const SizedBox(width: 8),
+                                                      const SizedBox(width: 6),
                                                       Text(
                                                         '@$alias',
                                                         style: const TextStyle(
                                                           color: AppConstants
                                                               .textSecondary,
-                                                          fontSize: 13,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                      const Spacer(),
+                                                      Text(
+                                                        timeago.format(createdAt,
+                                                            locale: 'en_short'),
+                                                        style: const TextStyle(
+                                                          color: AppConstants
+                                                              .textSecondary,
+                                                          fontSize: 11,
                                                         ),
                                                       ),
                                                     ],
                                                   ),
-                                                  const SizedBox(height: 4),
+                                                  const SizedBox(height: 6),
                                                   TappableMentionText(
                                                     text: content,
                                                     baseStyle: const TextStyle(
                                                       color: Colors.white,
                                                       height: 1.35,
                                                       fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    timeago.format(createdAt,
-                                                        locale: 'en_short'),
-                                                    style: const TextStyle(
-                                                      color: AppConstants
-                                                          .textSecondary,
-                                                      fontSize: 12,
                                                     ),
                                                   ),
                                                 ],
@@ -473,7 +524,22 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   padding:
                       EdgeInsets.fromLTRB(16, 0, 16, bottom > 0 ? bottom : 12),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppConstants.darkGray,
+                        backgroundImage: widget.currentUser?.profileImageUrl !=
+                                null
+                            ? NetworkImage(
+                                widget.currentUser!.profileImageUrl!)
+                            : null,
+                        child: widget.currentUser?.profileImageUrl == null
+                            ? const Icon(Icons.person,
+                                size: 16, color: Colors.white)
+                            : null,
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
                           controller: _controller,
@@ -487,7 +553,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             filled: true,
                             fillColor: AppConstants.darkGray,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(18),
                               borderSide: BorderSide.none,
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -498,19 +564,29 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      IconButton(
-                        onPressed: _isSending ? null : _sendComment,
-                        icon: _isSending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppConstants.primaryBlue,
-                                ),
-                              )
-                            : const Icon(Icons.send_rounded,
-                                color: AppConstants.primaryBlue),
+                      GestureDetector(
+                        onTap: _isSending ? null : _sendComment,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppConstants.primaryBlue,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: _isSending
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.send_rounded,
+                                    color: Colors.white, size: 18),
+                          ),
+                        ),
                       ),
                     ],
                   ),

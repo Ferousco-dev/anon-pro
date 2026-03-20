@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
 import '../../models/message_model.dart';
 import '../../models/chat_model.dart';
-import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../widgets/message_bubble.dart';
 import '../../main.dart';
+import '../../services/local_database_service.dart';
+import '../../services/offline_sync_service.dart';
+import '../../providers/connectivity_provider.dart';
 import 'group_management_screen.dart';
 import '../profile/profile_screen.dart';
+
+const _kChatSurface = Color(0xFF0B0B0D);
+const _kChatBorder = Color(0xFF1F2226);
 
 class ConversationScreen extends StatefulWidget {
   final ChatModel chat;
@@ -22,13 +29,26 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen> {
+  static const _kBg = Color(0xFF000000);
+  static const _kSurface = Color(0xFF0B0B0D);
+  static const _kBorder = Color(0xFF1F2226);
+  static const _kTextPrimary = Color(0xFFFFFFFF);
+  static const _kTextSecondary = Color(0xFF9AA0A6);
+  static const _kAccent = Color(0xFF1E88E5);
+  static const _kAccentBlue = Color(0xFF1E88E5);
+  static const _kAccentRed = Color(0xFFFF4D4F);
+
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final List<MessageModel> _messages = [];
+  final Map<String, String> _pendingLocalToServer = {};
+  final LocalDatabaseService _localDb = LocalDatabaseService();
 
   bool _isLoading = true;
   bool _isSending = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
   String? _error;
 
   // Realtime subscriptions
@@ -36,6 +56,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
   RealtimeChannel? _reactionSubscription;
   RealtimeChannel? _groupSubscription;
   RealtimeChannel? _participantsSubscription;
+  RealtimeChannel? _presenceChannel;
+
+  final Set<String> _onlineUserIds = {};
+  bool _isTyping = false;
+  bool _isOtherTyping = false;
+  Timer? _typingDebounce;
 
   // Reply state
   MessageModel? _replyingTo;
@@ -47,13 +73,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   late ChatModel _chat;
 
+  DateTime? _oldestMessageTime;
+
   @override
   void initState() {
     super.initState();
     _chat = widget.chat;
+    _scrollController.addListener(_onScroll);
     _loadMessages();
     _subscribeToMessages();
     _subscribeToReactions();
+    _setupPresenceAndTyping();
     _markMessagesAsRead();
     if (_chat.isGroup) {
       _loadConversationInfo();
@@ -92,6 +122,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
       }
     }
     setState(() => _showMentionSuggestions = false);
+
+    if (!_chat.canSendMessages) return;
+    if (text.trim().isEmpty) {
+      _typingDebounce?.cancel();
+      _setTypingStatus(false);
+      return;
+    }
+
+    _setTypingStatus(true);
+    _typingDebounce?.cancel();
+    _typingDebounce = Timer(
+      const Duration(seconds: 2),
+      () => _setTypingStatus(false),
+    );
   }
 
   void _insertMention(Map<String, dynamic> member) {
@@ -111,6 +155,81 @@ class _ConversationScreenState extends State<ConversationScreen> {
       );
     }
     setState(() => _showMentionSuggestions = false);
+  }
+
+  void _setupPresenceAndTyping() {
+    final currentUser = supabase.auth.currentUser;
+    if (currentUser == null) return;
+
+    _presenceChannel = supabase.channel(
+      'presence:${_chat.id}',
+      opts: RealtimeChannelConfig(
+        key: currentUser.id,
+        enabled: true,
+        self: true,
+      ),
+    );
+
+    _presenceChannel!
+        .onPresenceSync((_) => _updateOnlineUsers())
+        .onPresenceJoin((_) => _updateOnlineUsers())
+        .onPresenceLeave((_) => _updateOnlineUsers())
+        .onBroadcast(event: 'typing', callback: _handleTypingEvent)
+        .subscribe((status, _) {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        _presenceChannel?.track({
+          'user_id': currentUser.id,
+          'online_at': DateTime.now().toIso8601String(),
+        });
+      }
+    });
+  }
+
+  void _updateOnlineUsers() {
+    final channel = _presenceChannel;
+    if (channel == null) return;
+    final state = channel.presenceState();
+    final ids = <String>{};
+    for (final presence in state) {
+      for (final meta in presence.presences) {
+        final id = meta.payload['user_id'] as String?;
+        if (id != null && id.isNotEmpty) {
+          ids.add(id);
+        }
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _onlineUserIds
+          ..clear()
+          ..addAll(ids);
+      });
+    }
+  }
+
+  void _handleTypingEvent(Map<String, dynamic> payload) {
+    final currentUserId = supabase.auth.currentUser?.id;
+    final senderId = payload['user_id'] as String?;
+    if (senderId == null || senderId == currentUserId) return;
+    final isTyping = payload['is_typing'] == true;
+    if (mounted) {
+      setState(() => _isOtherTyping = isTyping);
+    }
+  }
+
+  void _setTypingStatus(bool isTyping) {
+    if (_isTyping == isTyping) return;
+    _isTyping = isTyping;
+    final currentUserId = supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+    _presenceChannel?.sendBroadcastMessage(
+      event: 'typing',
+      payload: {
+        'conversation_id': _chat.id,
+        'user_id': currentUserId,
+        'is_typing': isTyping,
+      },
+    );
   }
 
   // ─── Data Loading ─────────────────────────────────────────────────────────────
@@ -163,6 +282,34 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   Future<void> _loadMessages() async {
+    await _loadCachedMessages();
+    await _loadMessagesFromNetwork();
+  }
+
+  Future<void> _loadCachedMessages() async {
+    try {
+      final cached = await _localDb.getCachedMessagesForConversation(
+        _chat.id,
+        limit: 40,
+        offset: 0,
+      );
+      if (cached.isEmpty || !mounted) return;
+      final sorted = cached.reversed.toList();
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(sorted.map(_messageFromCache));
+        _isLoading = false;
+      });
+      _oldestMessageTime = _messages.isNotEmpty
+          ? _messages.first.createdAt
+          : _oldestMessageTime;
+    } catch (e) {
+      debugPrint('Error loading cached messages: $e');
+    }
+  }
+
+  Future<void> _loadMessagesFromNetwork() async {
     try {
       final currentUser = supabase.auth.currentUser;
       if (currentUser == null) return;
@@ -183,11 +330,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
             )
           ''')
           .eq('conversation_id', _chat.id)
-          .order('created_at', ascending: true)
-          .limit(100);
+          .order('created_at', ascending: false)
+          .limit(40);
 
-      final messageIds =
-          (response as List).map((m) => m['id'] as String).toList();
+      final rows = (response as List).reversed.toList();
+      final messageIds = rows.map((m) => m['id'] as String).toList();
       Map<String, Map<String, List<String>>> allReactions = {};
 
       if (messageIds.isNotEmpty) {
@@ -207,25 +354,85 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
       if (mounted) {
         setState(() {
-          _messages.clear();
-          for (var messageData in response) {
-            _messages.add(_parseMessage({
-              ...messageData,
-              'reactions': allReactions[messageData['id']] ?? {},
-            }));
-          }
+          _messages
+            ..clear()
+            ..addAll(rows.map((messageData) => _parseMessage({
+                  ...messageData,
+                  'reactions': allReactions[messageData['id']] ?? {},
+                })));
           _isLoading = false;
+          _error = null;
+          _hasMore = rows.length == 40;
         });
+        _oldestMessageTime =
+            _messages.isNotEmpty ? _messages.first.createdAt : null;
+        await _cacheMessages(rows);
         _scrollToBottom();
       }
     } catch (e) {
       debugPrint('Error loading messages: $e');
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = AppErrorHandler.userMessage(e);
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadMoreMessages() async {
+    if (_isLoadingMore || !_hasMore || _oldestMessageTime == null) return;
+    _isLoadingMore = true;
+
+    try {
+      final response = await supabase
+          .from('messages')
+          .select('''
+            *,
+            users:sender_id (
+              alias,
+              display_name,
+              profile_image_url
+            ),
+            reply_message:reply_to_id (
+              content,
+              sender_id,
+              users:sender_id (alias, display_name)
+            )
+          ''')
+          .eq('conversation_id', _chat.id)
+          .lt('created_at', _oldestMessageTime!.toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(40);
+
+      final rows = (response as List).reversed.toList();
+      if (rows.isEmpty) {
+        _hasMore = false;
+        _isLoadingMore = false;
+        return;
+      }
+
+      final prevMax = _scrollController.position.maxScrollExtent;
+      setState(() {
+        _messages.insertAll(
+          0,
+          rows.map((messageData) => _parseMessage(messageData)).toList(),
+        );
+        _oldestMessageTime = _messages.first.createdAt;
+        _hasMore = rows.length == 40;
+      });
+      await _cacheMessages(rows);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_scrollController.hasClients) return;
+        final newMax = _scrollController.position.maxScrollExtent;
+        final delta = newMax - prevMax;
+        _scrollController.jumpTo(_scrollController.position.pixels + delta);
+      });
+    } catch (e) {
+      debugPrint('Error loading more messages: $e');
+    } finally {
+      _isLoadingMore = false;
     }
   }
 
@@ -275,7 +482,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           replyUser?['alias'] as String?;
     }
 
-    return MessageModel.fromJson({
+    final parsed = MessageModel.fromJson({
       ...messageData,
       'sender_alias': userData?['alias'],
       'sender_display_name': userData?['display_name'],
@@ -284,6 +491,53 @@ class _ConversationScreenState extends State<ConversationScreen> {
       'reply_to_sender_name': replyToSenderName,
       'reactions': messageData['reactions'] ?? {},
     });
+    final deliveryStatus = parsed.readAt != null
+        ? MessageDeliveryStatus.read
+        : MessageDeliveryStatus.sent;
+    return parsed.copyWith(deliveryStatus: deliveryStatus);
+  }
+
+  MessageModel _messageFromCache(Map<String, dynamic> row) {
+    final createdAt = row['created_at'];
+    final created = createdAt is int
+        ? DateTime.fromMillisecondsSinceEpoch(createdAt)
+        : DateTime.now();
+    final status = row['status'] as String?;
+    final deliveryStatus = status == 'sending'
+        ? MessageDeliveryStatus.sending
+        : MessageDeliveryStatus.sent;
+    return MessageModel(
+      id: row['id'] as String,
+      conversationId: row['conversation_id'] as String,
+      senderId: row['sender_id'] as String,
+      content: row['content'] as String? ?? '',
+      createdAt: created,
+      messageType: row['message_type'] as String? ?? 'text',
+      deliveryStatus: deliveryStatus,
+    );
+  }
+
+  Future<void> _cacheMessages(List<dynamic> rows) async {
+    if (rows.isEmpty) return;
+    final mapped = rows.map((messageData) {
+      final createdAt = DateTime.tryParse(
+            messageData['created_at'] as String? ?? '',
+          ) ??
+          DateTime.now();
+      return {
+        'id': messageData['id'] as String,
+        'conversation_id': messageData['conversation_id'] as String,
+        'sender_id': messageData['sender_id'] as String,
+        'receiver_id': null,
+        'content': messageData['content'] as String? ?? '',
+        'created_at': createdAt.millisecondsSinceEpoch,
+        'status': 'sent',
+        'is_deleted': 0,
+        'is_local_only': 0,
+      };
+    }).toList();
+
+    await _localDb.upsertMessages(mapped);
   }
 
   // ─── Realtime Subscriptions ───────────────────────────────────────────────────
@@ -306,6 +560,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           callback: (payload) async {
             try {
               final senderId = payload.newRecord['sender_id'] as String;
+              await _cacheMessages([payload.newRecord]);
               final userData = await supabase
                   .from('users')
                   .select('alias, display_name, profile_image_url')
@@ -313,16 +568,45 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   .single();
 
               if (mounted) {
+                final parsed = _parseMessage({
+                  ...payload.newRecord,
+                  'sender_alias': userData['alias'],
+                  'sender_display_name': userData['display_name'],
+                  'sender_profile_image_url': userData['profile_image_url'],
+                });
                 setState(() {
-                  _messages.add(MessageModel.fromJson({
-                    ...payload.newRecord,
-                    'sender_alias': userData['alias'],
-                    'sender_display_name': userData['display_name'],
-                    'sender_profile_image_url': userData['profile_image_url'],
-                  }));
+                  final existingIndex =
+                      _messages.indexWhere((m) => m.id == parsed.id);
+                  if (existingIndex != -1) {
+                    _messages[existingIndex] = parsed;
+                  } else if (senderId == currentUser.id) {
+                    final optimisticIndex = _messages.indexWhere((m) =>
+                        m.id.startsWith('local_') &&
+                        m.senderId == senderId &&
+                        m.content == parsed.content &&
+                        m.replyToId == parsed.replyToId &&
+                        m.deliveryStatus != MessageDeliveryStatus.sent &&
+                        m.createdAt
+                                .difference(parsed.createdAt)
+                                .inSeconds
+                                .abs() <=
+                            3600);
+                    if (optimisticIndex != -1) {
+                      _pendingLocalToServer[_messages[optimisticIndex].id] =
+                          parsed.id;
+                      _messages[optimisticIndex] = parsed;
+                    } else {
+                      _messages.add(parsed);
+                    }
+                  } else {
+                    _messages.add(parsed);
+                  }
                 });
                 _scrollToBottom();
-                if (senderId != currentUser.id) _markMessagesAsRead();
+                if (senderId != currentUser.id) {
+                  _markMessagesAsRead();
+                  if (mounted) setState(() => _isOtherTyping = false);
+                }
               }
             } catch (e) {
               debugPrint('Error fetching sender info: $e');
@@ -395,13 +679,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
               final removedUserId = payload.oldRecord['user_id'] as String?;
               if (removedUserId == currentUserId && mounted) {
                 Navigator.of(context).popUntil((route) => route.isFirst);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('You were removed from this group'),
-                    backgroundColor: AppConstants.red,
-                  ),
-                );
-              }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You were removed from this group'),
+            backgroundColor: _kAccentRed,
+          ),
+        );
+      }
             }
 
             if (payload.eventType == PostgresChangeEvent.update) {
@@ -447,51 +731,168 @@ class _ConversationScreenState extends State<ConversationScreen> {
     });
   }
 
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels <= 120) {
+      _loadMoreMessages();
+    }
+  }
+
   Future<void> _sendMessage() async {
     final content = _messageController.text.trim();
-    if (content.isEmpty || _isSending) return;
+    if (content.isEmpty) return;
 
     final currentUser = supabase.auth.currentUser;
     if (currentUser == null) return;
 
     if (!_chat.canSendMessages) return;
 
+    final mentions = RegExp(r'@(\w+)')
+        .allMatches(content)
+        .map((m) => m.group(1)!)
+        .toList();
+
+    final optimisticId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+    final optimisticMessage = MessageModel(
+      id: optimisticId,
+      conversationId: _chat.id,
+      senderId: currentUser.id,
+      content: content,
+      createdAt: DateTime.now(),
+      senderAlias: null,
+      senderDisplayName: null,
+      senderProfileImageUrl: null,
+      replyToId: _replyingTo?.id,
+      replyToContent: _replyingTo?.content,
+      replyToSenderName:
+          _replyingTo?.senderDisplayName ?? _replyingTo?.senderAlias,
+      messageType: 'text',
+      mentions: mentions,
+      deliveryStatus: MessageDeliveryStatus.sending,
+    );
+
+    setState(() {
+      _messages.add(optimisticMessage);
+      _replyingTo = null;
+      _showMentionSuggestions = false;
+    });
+    _messageController.clear();
+    _scrollToBottom();
+    _setTypingStatus(false);
+
+    _sendMessageToBackend(
+      optimisticId: optimisticId,
+      content: content,
+      mentions: mentions,
+      replyToId: optimisticMessage.replyToId,
+    );
+  }
+
+  Future<void> _sendMessageToBackend({
+    required String optimisticId,
+    required String content,
+    required List<String> mentions,
+    required String? replyToId,
+  }) async {
+    final currentUser = supabase.auth.currentUser;
+    if (currentUser == null) return;
     setState(() => _isSending = true);
 
-    try {
-      final mentions = RegExp(r'@(\w+)')
-          .allMatches(content)
-          .map((m) => m.group(1)!)
-          .toList();
+    final isOnline = context.read<ConnectivityProvider>().isOnline;
+    if (!isOnline) {
+      final offlinePayload = {
+        'conversation_id': _chat.id,
+        'sender_id': currentUser.id,
+        'content': content,
+        'message_type': 'text',
+        'reply_to_id': replyToId,
+        'mentions': mentions,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      await context.read<OfflineSyncService>().queueMessageInsert(offlinePayload);
+      await _localDb.upsertMessages([
+        {
+          'id': optimisticId,
+          'conversation_id': _chat.id,
+          'sender_id': currentUser.id,
+          'receiver_id': null,
+          'content': content,
+          'created_at': DateTime.now().millisecondsSinceEpoch,
+          'status': 'sending',
+          'is_deleted': 0,
+          'is_local_only': 1,
+        }
+      ]);
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+      return;
+    }
 
+    try {
       await supabase.from('messages').insert({
         'conversation_id': _chat.id,
         'sender_id': currentUser.id,
         'content': content,
         'message_type': 'text',
-        'reply_to_id': _replyingTo?.id,
+        'reply_to_id': replyToId,
         'mentions': mentions,
         'created_at': DateTime.now().toIso8601String(),
       });
 
-      _messageController.clear();
+      if (!mounted) return;
       setState(() {
-        _replyingTo = null;
-        _showMentionSuggestions = false;
+        final idx = _messages.indexWhere((m) => m.id == optimisticId);
+        if (idx != -1) {
+          _messages[idx] = _messages[idx]
+              .copyWith(deliveryStatus: MessageDeliveryStatus.sent);
+        }
+        _isSending = false;
       });
-    } catch (e) {
-      debugPrint('Error sending message: $e');
+    } catch (e, stack) {
+      if (!mounted) return;
+      await AppErrorHandler.report(
+        error: e,
+        stack: stack,
+        context: 'send_message',
+      );
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == optimisticId);
+        if (idx != -1) {
+          _messages[idx] = _messages[idx]
+              .copyWith(deliveryStatus: MessageDeliveryStatus.failed);
+        }
+        _isSending = false;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send: ${e.toString()}'),
-            backgroundColor: AppConstants.red,
+            content: Text(AppErrorHandler.userMessage(e)),
+            backgroundColor: _kAccentRed,
           ),
         );
       }
     } finally {
-      if (mounted) setState(() => _isSending = false);
+      if (mounted && _isSending) {
+        setState(() => _isSending = false);
+      }
     }
+  }
+
+  void _retrySend(MessageModel message) {
+    setState(() {
+      final idx = _messages.indexWhere((m) => m.id == message.id);
+      if (idx != -1) {
+        _messages[idx] =
+            _messages[idx].copyWith(deliveryStatus: MessageDeliveryStatus.sending);
+      }
+    });
+    _sendMessageToBackend(
+      optimisticId: message.id,
+      content: message.content,
+      mentions: message.mentions,
+      replyToId: message.replyToId,
+    );
   }
 
   Future<void> _toggleReaction(MessageModel message, String emoji) async {
@@ -543,27 +944,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppConstants.darkGray,
+        backgroundColor: _kSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Delete Message',
-          style: TextStyle(color: AppConstants.white),
+          style: TextStyle(color: _kTextPrimary),
         ),
         content: const Text(
           'This message will be permanently deleted.',
-          style: TextStyle(color: AppConstants.textSecondary),
+          style: TextStyle(color: _kTextSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel',
-                style: TextStyle(color: AppConstants.textSecondary)),
+                style: TextStyle(color: _kTextSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete',
                 style: TextStyle(
-                    color: AppConstants.red, fontWeight: FontWeight.w600)),
+                    color: _kAccentRed, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -578,7 +979,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Message deleted'),
-            backgroundColor: AppConstants.darkGray,
+            backgroundColor: _kTextPrimary,
           ),
         );
       }
@@ -588,7 +989,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to delete message'),
-            backgroundColor: AppConstants.red,
+            backgroundColor: _kAccentRed,
           ),
         );
       }
@@ -618,12 +1019,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppConstants.darkGray,
+          backgroundColor: _kSurface,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text(
             'Block / Report Account',
-            style: TextStyle(color: AppConstants.white),
+            style: TextStyle(color: _kTextPrimary),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -632,19 +1033,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
               children: [
                 const Text(
                   'Select a reason to report (optional for block only):',
-                  style: TextStyle(
-                      color: AppConstants.textSecondary, fontSize: 13),
+                  style: TextStyle(color: _kTextSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
                 ...reasons.map(
                   (reason) => RadioListTile<String>(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    activeColor: AppConstants.primaryBlue,
+                    activeColor: _kAccent,
                     title: Text(
                       reason,
                       style: const TextStyle(
-                          color: AppConstants.white, fontSize: 14),
+                          color: _kTextPrimary, fontSize: 14),
                     ),
                     value: reason,
                     groupValue: selectedReason,
@@ -654,14 +1054,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: descController,
-                  style: const TextStyle(color: AppConstants.white),
+                  style: const TextStyle(color: _kTextPrimary),
                   maxLines: 3,
                   decoration: InputDecoration(
                     hintText: 'Additional details (optional)',
-                    hintStyle:
-                        const TextStyle(color: AppConstants.textSecondary),
+                    hintStyle: const TextStyle(color: _kTextSecondary),
                     filled: true,
-                    fillColor: AppConstants.black,
+                    fillColor: const Color(0xFF1A1D22),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none,
@@ -676,7 +1075,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text(
                 'Cancel',
-                style: TextStyle(color: AppConstants.textSecondary),
+                style: TextStyle(color: _kTextSecondary),
               ),
             ),
             TextButton(
@@ -686,7 +1085,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               },
               child: const Text(
                 'Block Only',
-                style: TextStyle(color: AppConstants.red),
+                style: TextStyle(color: _kAccentRed),
               ),
             ),
             TextButton(
@@ -707,8 +1106,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 'Block & Report',
                 style: TextStyle(
                   color: selectedReason == null
-                      ? AppConstants.textSecondary
-                      : AppConstants.primaryBlue,
+                      ? _kTextSecondary
+                      : _kAccent,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -732,7 +1131,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('User blocked'),
-            backgroundColor: AppConstants.darkGray,
+            backgroundColor: _kTextPrimary,
           ),
         );
         Navigator.pop(context); // Exit the conversation
@@ -743,7 +1142,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to block user'),
-            backgroundColor: AppConstants.red,
+            backgroundColor: _kAccentRed,
           ),
         );
       }
@@ -773,7 +1172,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('User blocked and reported'),
-            backgroundColor: AppConstants.darkGray,
+            backgroundColor: _kTextPrimary,
           ),
         );
         Navigator.pop(context); // Exit the conversation
@@ -784,7 +1183,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to block/report user'),
-            backgroundColor: AppConstants.red,
+            backgroundColor: _kAccentRed,
           ),
         );
       }
@@ -806,14 +1205,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (_replyingTo == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: AppConstants.darkGray,
+      color: _kSurface,
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _kBorder)),
+      ),
       child: Row(
         children: [
           Container(
             width: 3,
             height: 36,
             decoration: BoxDecoration(
-              color: AppConstants.primaryBlue,
+              color: _kAccent,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -825,7 +1227,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 Text(
                   'Replying to ${_replyingTo!.senderDisplayName ?? _replyingTo!.senderAlias ?? 'Unknown'}',
                   style: const TextStyle(
-                    color: AppConstants.primaryBlue,
+                    color: _kAccent,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -833,7 +1235,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 Text(
                   _replyingTo!.content,
                   style: const TextStyle(
-                    color: AppConstants.textSecondary,
+                    color: _kTextSecondary,
                     fontSize: 12,
                   ),
                   maxLines: 1,
@@ -844,7 +1246,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.close,
-                color: AppConstants.textSecondary, size: 18),
+                color: _kTextSecondary, size: 18),
             onPressed: () => setState(() => _replyingTo = null),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
@@ -867,86 +1269,87 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
     return Container(
       constraints: const BoxConstraints(maxHeight: 200),
-      color: AppConstants.darkGray,
-      child: ListView.builder(
-        shrinkWrap: true,
-        itemCount: suggestions.length,
-        itemBuilder: (context, index) {
-          final member = suggestions[index];
-          final isAll = member['isAll'] == true;
-          return ListTile(
-            dense: true,
-            leading: CircleAvatar(
-              radius: 16,
-              backgroundColor:
-                  isAll ? AppConstants.primaryBlue : AppConstants.lightGray,
-              backgroundImage: member['profile_image_url'] != null
-                  ? NetworkImage(member['profile_image_url'] as String)
-                  : null,
-              child: member['profile_image_url'] == null
-                  ? Icon(isAll ? Icons.group : Icons.person,
-                      size: 16, color: Colors.white)
-                  : null,
-            ),
-            title: Text(
-              member['display_name'] as String? ??
-                  member['alias'] as String? ??
-                  '',
-              style: const TextStyle(color: AppConstants.white, fontSize: 13),
-            ),
-            subtitle: isAll
-                ? null
-                : Text(
-                    '@${member['alias']}',
-                    style: const TextStyle(
-                        color: AppConstants.textSecondary, fontSize: 11),
-                  ),
-            onTap: () => _insertMention(member),
-          );
-        },
+      color: _kSurface,
+      child: Container(
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: _kBorder)),
+        ),
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: suggestions.length,
+          itemBuilder: (context, index) {
+            final member = suggestions[index];
+            final isAll = member['isAll'] == true;
+            return ListTile(
+              dense: true,
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor:
+                    isAll ? _kAccent : const Color(0xFF1A1D22),
+                backgroundImage: member['profile_image_url'] != null
+                    ? NetworkImage(member['profile_image_url'] as String)
+                    : null,
+                child: member['profile_image_url'] == null
+                    ? Icon(isAll ? Icons.group : Icons.person,
+                        size: 16, color: Colors.white)
+                    : null,
+              ),
+              title: Text(
+                member['display_name'] as String? ??
+                    member['alias'] as String? ??
+                    '',
+                style: const TextStyle(color: _kTextPrimary, fontSize: 13),
+              ),
+              subtitle: isAll
+                  ? null
+                  : Text(
+                      '@${member['alias']}',
+                      style: const TextStyle(
+                          color: _kTextSecondary, fontSize: 11),
+                    ),
+              onTap: () => _insertMention(member),
+            );
+          },
+        ),
       ),
     );
   }
 
   Widget _buildMessageInput() {
     final isLocked = !_chat.canSendMessages;
+    final hasText = _messageController.text.trim().isNotEmpty;
 
     return Column(
       children: [
         _buildReplyBanner(),
         _buildMentionSuggestions(),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppConstants.black,
-            border: Border(
-              top: BorderSide(
-                color: AppConstants.lightGray.withOpacity(0.2),
-                width: 0.5,
-              ),
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: const BoxDecoration(
+            color: _kSurface,
+            border: Border(top: BorderSide(color: _kBorder)),
           ),
           child: SafeArea(
             child: Row(
               children: [
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: AppConstants.darkGray,
-                      borderRadius: BorderRadius.circular(24),
+                      color: const Color(0xFF1A1D22),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: _kBorder),
                     ),
                     child: TextField(
                       controller: _messageController,
                       focusNode: _focusNode,
                       enabled: !isLocked,
-                      style: const TextStyle(color: AppConstants.white),
+                      style: const TextStyle(color: _kTextPrimary),
                       decoration: InputDecoration(
                         hintText: isLocked
                             ? 'Only admins can message...'
                             : 'Message...',
-                        hintStyle:
-                            const TextStyle(color: AppConstants.textSecondary),
+                        hintStyle: const TextStyle(color: _kTextSecondary),
                         border: InputBorder.none,
                       ),
                       maxLines: null,
@@ -957,34 +1360,37 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 ),
                 const SizedBox(width: 8),
                 // Lock icon when locked, send button otherwise
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isLocked
-                        ? AppConstants.darkGray
-                        : _messageController.text.trim().isEmpty
-                            ? AppConstants.darkGray
-                            : AppConstants.primaryBlue,
-                    shape: BoxShape.circle,
+                GestureDetector(
+                  onTap: isLocked || !hasText ? null : _sendMessage,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isLocked
+                          ? const Color(0xFF1A1D22)
+                          : hasText
+                              ? _kAccent
+                              : const Color(0xFF1F2226),
+                      shape: BoxShape.circle,
+                    ),
+                    child: isLocked
+                        ? const Icon(Icons.lock,
+                            color: _kTextSecondary, size: 20)
+                        : _isSending
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(Icons.send,
+                                color: hasText
+                                    ? Colors.white
+                                    : _kTextSecondary,
+                                size: 20),
                   ),
-                  child: isLocked
-                      ? const Icon(Icons.lock,
-                          color: AppConstants.textSecondary, size: 20)
-                      : GestureDetector(
-                          onTap: _isSending ? null : _sendMessage,
-                          child: _isSending
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.send,
-                                  color: Colors.white, size: 20),
-                        ),
                 ),
               ],
             ),
@@ -996,9 +1402,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Widget _buildMessagesList() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppConstants.primaryBlue),
-      );
+      return _buildMessageSkeleton();
     }
 
     if (_error != null) {
@@ -1007,11 +1411,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('Error loading messages',
-                style: TextStyle(color: AppConstants.white, fontSize: 18)),
+                style: TextStyle(color: _kTextPrimary, fontSize: 18)),
             const SizedBox(height: 8),
             Text(_error!,
-                style: const TextStyle(
-                    color: AppConstants.textSecondary, fontSize: 14)),
+                style:
+                    const TextStyle(color: _kTextSecondary, fontSize: 14)),
             const SizedBox(height: 16),
             ElevatedButton(
                 onPressed: _loadMessages, child: const Text('Retry')),
@@ -1026,29 +1430,33 @@ class _ConversationScreenState extends State<ConversationScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.chat_bubble_outline,
-                size: 64, color: AppConstants.textSecondary.withOpacity(0.5)),
+                size: 64, color: _kTextSecondary.withOpacity(0.5)),
             const SizedBox(height: 16),
             const Text('No messages yet',
                 style: TextStyle(
-                    color: AppConstants.textSecondary,
+                    color: _kTextSecondary,
                     fontSize: 18,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             const Text('Start the conversation!',
                 style:
-                    TextStyle(color: AppConstants.textSecondary, fontSize: 14)),
+                    TextStyle(color: _kTextSecondary, fontSize: 14)),
           ],
         ),
       );
     }
 
     final currentUserId = supabase.auth.currentUser?.id;
+    final itemCount = _messages.length + (_isOtherTyping ? 1 : 0);
 
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: _messages.length,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
+        if (_isOtherTyping && index == itemCount - 1) {
+          return _buildTypingIndicator();
+        }
         final message = _messages[index];
         final isCurrentUser = message.senderId == currentUserId;
         final showSenderInfo = _chat.isGroup &&
@@ -1066,15 +1474,82 @@ class _ConversationScreenState extends State<ConversationScreen> {
           onDelete: _deleteMessage,
           onBlockReport: _showBlockReportDialog,
           onAbout: _navigateToAbout,
+          onRetry: _retrySend,
         );
       },
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+          color: const Color(0xFF1A1D22),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _kBorder),
+          ),
+          child: const Text(
+            'Typing…',
+            style: TextStyle(color: _kTextSecondary, fontSize: 12.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageSkeleton() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      itemCount: 10,
+      itemBuilder: (context, index) {
+        final isMe = index.isEven;
+        final width = isMe ? 180.0 : 220.0;
+        return Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            width: width,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1D22),
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPresenceStatus() {
+    if (_chat.isGroup) {
+      final onlineCount = _onlineUserIds.length;
+      if (onlineCount == 0) return const SizedBox.shrink();
+      return Text(
+        '$onlineCount online',
+        style: const TextStyle(color: _kTextSecondary, fontSize: 12),
+      );
+    }
+
+    final otherId = _chat.otherUserId;
+    if (otherId == null) return const SizedBox.shrink();
+    final isOnline = _onlineUserIds.contains(otherId);
+    return Text(
+      isOnline ? 'Online' : 'Offline',
+      style: TextStyle(
+        color: isOnline ? _kAccent : _kTextSecondary,
+        fontSize: 12,
+      ),
     );
   }
 
   void _showDmOptions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppConstants.darkGray,
+      backgroundColor: _kSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1088,7 +1563,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppConstants.lightGray,
+                  color: _kBorder,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1096,7 +1571,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               _DmMenuTile(
                 icon: Icons.info_outline,
                 label: 'About',
-                color: AppConstants.white,
+                color: _kTextPrimary,
                 onTap: () {
                   Navigator.pop(ctx);
                   // Build a fake message with the other user's ID to reuse _navigateToAbout
@@ -1115,7 +1590,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               _DmMenuTile(
                 icon: Icons.block,
                 label: 'Block / Report',
-                color: AppConstants.white,
+                color: _kTextPrimary,
                 onTap: () {
                   Navigator.pop(ctx);
                   final currentUser = supabase.auth.currentUser;
@@ -1151,11 +1626,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppConstants.darkGray,
+          backgroundColor: _kSurface,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Block / Report Account',
-              style: TextStyle(color: AppConstants.white)),
+              style: TextStyle(color: _kTextPrimary)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1163,17 +1638,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
               children: [
                 const Text(
                   'Select a reason to report (optional for block only):',
-                  style: TextStyle(
-                      color: AppConstants.textSecondary, fontSize: 13),
+                  style: TextStyle(color: _kTextSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
                 ...reasons.map((reason) => RadioListTile<String>(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      activeColor: AppConstants.primaryBlue,
+                      activeColor: _kAccent,
                       title: Text(reason,
                           style: const TextStyle(
-                              color: AppConstants.white, fontSize: 14)),
+                              color: _kTextPrimary, fontSize: 14)),
                       value: reason,
                       groupValue: selectedReason,
                       onChanged: (v) =>
@@ -1182,14 +1656,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: descController,
-                  style: const TextStyle(color: AppConstants.white),
+                  style: const TextStyle(color: _kTextPrimary),
                   maxLines: 3,
                   decoration: InputDecoration(
                     hintText: 'Additional details (optional)',
-                    hintStyle:
-                        const TextStyle(color: AppConstants.textSecondary),
+                    hintStyle: const TextStyle(color: _kTextSecondary),
                     filled: true,
-                    fillColor: AppConstants.black,
+                    fillColor: const Color(0xFF1A1D22),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none,
@@ -1203,7 +1676,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel',
-                  style: TextStyle(color: AppConstants.textSecondary)),
+                  style: TextStyle(color: _kTextSecondary)),
             ),
             TextButton(
               onPressed: () {
@@ -1211,7 +1684,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 _blockUser(blockerId: currentUserId, blockedId: otherUserId);
               },
               child: const Text('Block Only',
-                  style: TextStyle(color: AppConstants.red)),
+                  style: TextStyle(color: _kAccentRed)),
             ),
             TextButton(
               onPressed: selectedReason == null
@@ -1231,8 +1704,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 'Block & Report',
                 style: TextStyle(
                   color: selectedReason == null
-                      ? AppConstants.textSecondary
-                      : AppConstants.primaryBlue,
+                      ? _kTextSecondary
+                      : _kAccent,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1246,7 +1719,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void _showGroupOptions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppConstants.darkGray,
+      backgroundColor: _kSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1258,15 +1731,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppConstants.lightGray,
+              color: _kBorder,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
           ListTile(
-            leading: const Icon(Icons.group, color: AppConstants.white),
+            leading: const Icon(Icons.group, color: _kTextPrimary),
             title: const Text('Group Info',
-                style: TextStyle(color: AppConstants.white)),
+                style: TextStyle(color: _kTextPrimary)),
             onTap: () {
               Navigator.pop(ctx);
               Navigator.push(
@@ -1281,11 +1754,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
             ListTile(
               leading: Icon(
                 _chat.isLocked ? Icons.lock_open : Icons.lock,
-                color: AppConstants.white,
+                color: _kTextPrimary,
               ),
               title: Text(
                 _chat.isLocked ? 'Unlock Group' : 'Lock Group',
-                style: const TextStyle(color: AppConstants.white),
+                style: const TextStyle(color: _kTextPrimary),
               ),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -1304,26 +1777,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppConstants.black,
+      backgroundColor: _kBg,
       appBar: AppBar(
-        backgroundColor: AppConstants.black,
+        backgroundColor: _kSurface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.white),
+          icon: const Icon(Icons.arrow_back, color: _kTextPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: AppConstants.primaryBlue,
+              backgroundColor: const Color(0xFF1A1D22),
               backgroundImage: _chat.displayImageUrl != null
                   ? NetworkImage(_chat.displayImageUrl!)
                   : null,
               child: _chat.displayImageUrl == null
                   ? Icon(
                       _chat.isGroup ? Icons.group : Icons.person,
-                      color: Colors.white,
+                      color: _kTextSecondary,
                       size: 20,
                     )
                   : null,
@@ -1339,7 +1812,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         child: Text(
                           _chat.displayName,
                           style: const TextStyle(
-                            color: AppConstants.white,
+                            color: _kTextPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1350,15 +1823,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       if (_chat.isGroup && _chat.isLocked) ...[
                         const SizedBox(width: 6),
                         const Icon(Icons.lock,
-                            color: AppConstants.textSecondary, size: 14),
+                            color: _kTextSecondary, size: 14),
                       ],
                     ],
                   ),
+                  _buildPresenceStatus(),
                   if (_chat.isGroup)
                     Text(
                       '${_chat.participantIds.length} members',
                       style: const TextStyle(
-                        color: AppConstants.textSecondary,
+                        color: _kTextSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -1369,7 +1843,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_vert, color: AppConstants.white),
+            icon: const Icon(Icons.more_vert, color: _kTextPrimary),
             // Only group chats use the options menu for now
             onPressed: _chat.isGroup ? _showGroupOptions : _showDmOptions,
           ),
@@ -1383,17 +1857,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: AppConstants.darkGray,
+              color: _kSurface,
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: _kBorder)),
+              ),
               child: Row(
                 children: [
-                  const Icon(Icons.push_pin,
-                      color: AppConstants.primaryBlue, size: 16),
+                  const Icon(Icons.push_pin, color: _kAccentBlue, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _chat.pinnedMessage!,
                       style: const TextStyle(
-                          color: Colors.white, fontSize: 13),
+                          color: _kTextPrimary, fontSize: 13),
                     ),
                   ),
                 ],
@@ -1418,6 +1894,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _reactionSubscription?.unsubscribe();
     _groupSubscription?.unsubscribe();
     _participantsSubscription?.unsubscribe();
+    _presenceChannel?.unsubscribe();
+    _typingDebounce?.cancel();
     super.dispose();
   }
 }
@@ -1445,8 +1923,9 @@ class _DmMenuTile extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppConstants.black,
+          color: _kChatSurface,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kChatBorder),
         ),
         child: Row(
           children: [

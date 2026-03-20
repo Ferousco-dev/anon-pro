@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'local_database_service.dart';
+import '../utils/app_error_handler.dart';
 
 class OfflineSyncService extends ChangeNotifier {
   OfflineSyncService(this._db, this._supabaseClient) {
@@ -64,7 +65,7 @@ class OfflineSyncService extends ChangeNotifier {
       _lastSuccessfulSync = DateTime.now();
       notifyListeners();
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = AppErrorHandler.userMessage(e);
       notifyListeners();
     } finally {
       _isSyncing = false;
@@ -202,4 +203,3 @@ class OfflineSyncService extends ChangeNotifier {
     super.dispose();
   }
 }
-

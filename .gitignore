@@ -31,6 +31,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+!/build/web/
+!/build/web/**
 /coverage/
 
 # Symbolication related
@@ -50,3 +52,7 @@ app.*.map.json
 needed.txt
 build_web_output.txt
 pubspec.yaml.backup
+web/firebase-config.json
+android/app/google-services.json
+ios/GoogleService-Info.plist
+ios/Runner/GoogleService-Info.plist

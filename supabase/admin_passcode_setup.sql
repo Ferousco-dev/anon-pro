@@ -39,9 +39,11 @@ USING (
   )
 );
 
--- Insert initial passcode (190308)
+-- Insert initial passcode from settings (avoid hardcoded secrets)
 INSERT INTO admin_passcode (passcode, changed_count, last_changed_by)
-VALUES ('190308', 0, 'system_init')
+SELECT current_setting('app.settings.admin_passcode', true), 0, 'system_init'
+WHERE current_setting('app.settings.admin_passcode', true) IS NOT NULL
+  AND current_setting('app.settings.admin_passcode', true) <> ''
 ON CONFLICT DO NOTHING;
 
 -- Create audit log for passcode changes

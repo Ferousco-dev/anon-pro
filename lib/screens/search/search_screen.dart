@@ -54,10 +54,11 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _onQueryChanged(String query) {
     _debounce?.cancel();
-    if (query.trim() == _lastQuery) return;
+    final trimmed = query.trim();
+    if (trimmed == _lastQuery) return;
 
     // Hidden admin terminal trigger — exact match only
-    if (query.trim().toLowerCase() == 'logs') {
+    if (trimmed.toLowerCase() == 'logs') {
       _controller.clear();
       setState(() {
         _userResults.clear();
@@ -75,7 +76,7 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
 
-    if (query.trim().isEmpty) {
+    if (trimmed.isEmpty) {
       setState(() {
         _userResults.clear();
         _postResults.clear();
@@ -87,9 +88,19 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     setState(() => _isSearching = true);
+    _ensureSearchFocus(force: true);
 
     _debounce = Timer(const Duration(milliseconds: 450), () {
-      _executeSearch(query.trim());
+      _executeSearch(trimmed);
+    });
+  }
+
+  void _ensureSearchFocus({bool force = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (force || !_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
     });
   }
 

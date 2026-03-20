@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_error_handler.dart';
 import '../../main.dart';
 import '../../models/chat_model.dart';
 import '../inbox/conversation_screen.dart';
@@ -53,7 +54,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = AppErrorHandler.userMessage(e);
           _isLoading = false;
         });
       }

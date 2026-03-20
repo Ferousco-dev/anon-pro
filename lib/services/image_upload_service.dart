@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image/image.dart' as img;
+import '../utils/app_config.dart';
 
 class ImageUploadService {
   static const String _imageKitUploadUrl =
@@ -111,6 +112,12 @@ class ImageUploadService {
 
       final signature = await _fetchImageKitSignature();
 
+      // Debug: log signature values received from edge function
+      debugPrint('[ImageKit] publicKey: ${signature['publicKey']}');
+      debugPrint('[ImageKit] signature: ${signature['signature']}');
+      debugPrint('[ImageKit] token: ${signature['token']}');
+      debugPrint('[ImageKit] expire: ${signature['expire']} (type: ${signature['expire'].runtimeType})');
+
       // Create multipart request
       final request =
           http.MultipartRequest('POST', Uri.parse(_imageKitUploadUrl));
@@ -135,9 +142,14 @@ class ImageUploadService {
           );
 
       final responseBody = await response.stream.bytesToString();
+      debugPrint(
+        'ImageKit upload response: ${response.statusCode} ${responseBody.trim()}',
+      );
 
       if (response.statusCode != 200) {
-        throw Exception('ImageKit upload failed: ${response.statusCode}');
+        throw Exception(
+          'ImageKit upload failed: ${response.statusCode} ${responseBody.trim()}',
+        );
       }
 
       final data = jsonDecode(responseBody) as Map<String, dynamic>;
@@ -250,6 +262,15 @@ class ImageUploadService {
       );
     }
     final data = response.data as Map<String, dynamic>;
+    final serverKey = data['publicKey'] as String?;
+    if (serverKey != null &&
+        serverKey.isNotEmpty &&
+        AppConfig.imagekitPublicKey.isNotEmpty &&
+        serverKey != AppConfig.imagekitPublicKey) {
+      throw Exception(
+        'ImageKit key mismatch. App key does not match server key.',
+      );
+    }
     return data;
   }
 }

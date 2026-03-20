@@ -313,23 +313,40 @@ class _PostViewerState extends State<PostViewer> with TickerProviderStateMixin {
                             if (snapshot.connectionState ==
                                     ConnectionState.done &&
                                 snapshot.data != null) {
-                              return Image.file(
-                                snapshot.data!,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    _buildErrorWidget(
-                                        'Failed to load cached image'),
+                              return InteractiveViewer(
+                                minScale: 1.0,
+                                maxScale: 4.0,
+                                child: Center(
+                                  child: Image.file(
+                                    snapshot.data!,
+                                    fit: BoxFit.contain,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        _buildErrorWidget(
+                                            'Failed to load cached image'),
+                                  ),
+                                ),
                               );
                             }
 
                             // Loading or cache failed, use network with caching
                             return CachedNetworkImage(
                               imageUrl: mediaUrl,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
+                              imageBuilder: (context, imageProvider) {
+                                return InteractiveViewer(
+                                  minScale: 1.0,
+                                  maxScale: 4.0,
+                                  child: Center(
+                                    child: Image(
+                                      image: imageProvider,
+                                      fit: BoxFit.contain,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                    ),
+                                  ),
+                                );
+                              },
                               placeholder: (context, url) => Container(
                                 color: AppConstants.darkGray,
                                 child: const Center(

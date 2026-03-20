@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,6 +14,7 @@ import '../../models/user_model.dart';
 import '../../main.dart';
 import '../../services/image_upload_service.dart';
 import '../../services/feed_cache_service.dart';
+import '../../utils/app_error_handler.dart';
 
 class AnonymousScreen extends StatefulWidget {
   const AnonymousScreen({super.key});
@@ -24,6 +26,10 @@ class AnonymousScreen extends StatefulWidget {
 class _AnonymousScreenState extends State<AnonymousScreen> {
   List<PostModel> _posts = [];
   bool _isLoading = true;
+  bool _isFetchingPosts = false;
+  bool _isLoadingMore = false;
+  bool _hasMorePosts = true;
+  DateTime? _oldestPostCursor;
   String? _error;
   UserModel? _currentUser;
   final Set<String> _likeInFlight = {};
@@ -36,26 +42,14 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
   void initState() {
     super.initState();
     _loadFromCacheThenNetwork();
+    _scrollController.addListener(_onScroll);
   }
 
   Future<void> _loadFromCacheThenNetwork() async {
     // 1) Instantly load cached anonymous feed
     final cachedPosts = _cache.getAnonFeed();
     if (cachedPosts != null && cachedPosts.isNotEmpty && mounted) {
-      final anonymousUser = UserModel(
-        id: '',
-        email: '',
-        alias: 'Anonymous',
-        displayName: 'Anonymous',
-        role: 'user',
-        isBanned: false,
-        isVerified: false,
-        followersCount: 0,
-        followingCount: 0,
-        postsCount: 0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      final anonymousUser = _buildAnonymousUser();
       final posts = cachedPosts.map((p) => PostModel.fromJson(p)).toList();
       for (final post in posts) {
         post.user = anonymousUser;
@@ -63,12 +57,15 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
       setState(() {
         _posts = posts;
         _isLoading = false;
+        _hasMorePosts = posts.length >= AppConstants.postsPerPage;
+        _oldestPostCursor = posts.isNotEmpty ? posts.last.createdAt : null;
       });
+      _prefetchPostImages(posts, limit: 4);
     }
 
     // 2) Refresh from network
     _loadCurrentUser();
-    _loadPosts();
+    _loadPosts(showLoading: _posts.isEmpty);
   }
 
   Future<void> _loadCurrentUser() async {
@@ -86,92 +83,133 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
     }
   }
 
-  Future<void> _loadPosts({bool showLoading = true}) async {
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_isLoadingMore || _isFetchingPosts || !_hasMorePosts) return;
+    if (_scrollController.position.extentAfter < 500) {
+      unawaited(_loadMorePosts());
+    }
+  }
+
+  void _prefetchPostImages(List<PostModel> posts, {int limit = 6}) {
+    if (!mounted) return;
+    final urls = posts
+        .map((p) => p.imageUrl)
+        .where((url) => url != null && url.startsWith('http'))
+        .take(limit);
+    for (final url in urls) {
+      precacheImage(CachedNetworkImageProvider(url!), context);
+    }
+  }
+
+  UserModel _buildAnonymousUser() {
+    return UserModel(
+      id: '',
+      email: '',
+      alias: 'Anonymous',
+      displayName: 'Anonymous',
+      role: 'user',
+      isBanned: false,
+      isVerified: false,
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<List<PostModel>> _fetchAnonPostsPage(
+      {DateTime? before, int limit = AppConstants.postsPerPage}) async {
+    final nowIso = DateTime.now().toIso8601String();
+
+    List response;
     try {
-      final nowIso = DateTime.now().toIso8601String();
-      if (showLoading) {
-        if (mounted) setState(() => _isLoading = true);
-      }
-      double savedOffset =
-          _scrollController.hasClients ? _scrollController.offset : 0.0;
-      // Try the new schema first
-      List response;
-      try {
-        response = await supabase
-            .from('posts')
-            .select('''
+      var query = supabase
+          .from('posts')
+          .select('''
               *,
               likes!left (
                 id, user_id
               )
             ''')
-            .eq('is_anonymous', true)
-            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
-            .or('expires_at.is.null,expires_at.gt.$nowIso')
-            .order('created_at', ascending: false)
-            .limit(AppConstants.postsPerPage);
-      } catch (e) {
-        // Fallback to old schema if new schema doesn't exist
-        response = await supabase
-            .from('posts')
-            .select('*')
-            .eq('is_anonymous', true)
-            .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
-            .or('expires_at.is.null,expires_at.gt.$nowIso')
-            .order('created_at', ascending: false)
-            .limit(AppConstants.postsPerPage);
+          .eq('is_anonymous', true)
+          .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+          .or('expires_at.is.null,expires_at.gt.$nowIso');
+
+      if (before != null) {
+        query = query.lt('created_at', before.toIso8601String());
       }
 
-      final posts = (response as List).map((post) {
-        final postData = post as Map<String, dynamic>;
+      response = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+    } catch (e) {
+      var fallbackQuery = supabase
+          .from('posts')
+          .select('*')
+          .eq('is_anonymous', true)
+          .or('scheduled_at.is.null,scheduled_at.lte.$nowIso')
+          .or('expires_at.is.null,expires_at.gt.$nowIso');
 
-        // Handle both new and old schema
-        int likesCount = 0;
-        bool isLiked = false;
+      if (before != null) {
+        fallbackQuery =
+            fallbackQuery.lt('created_at', before.toIso8601String());
+      }
 
-        if (postData.containsKey('likes')) {
-          // New schema with likes
-          final likes = postData['likes'] as List? ?? [];
-          likesCount = likes.length;
+      response = await fallbackQuery
+          .order('created_at', ascending: false)
+          .limit(limit);
+    }
 
-          if (_currentUser != null) {
-            isLiked = likes.any((like) => like['user_id'] == _currentUser!.id);
-          }
-        } else {
-          // Old schema - use likes_count field if available
-          likesCount = postData['likes_count'] as int? ?? 0;
+    final posts = response.map((post) {
+      final postData = post as Map<String, dynamic>;
+
+      int likesCount = 0;
+      bool isLiked = false;
+
+      if (postData.containsKey('likes')) {
+        final likes = postData['likes'] as List? ?? [];
+        likesCount = likes.length;
+        if (_currentUser != null) {
+          isLiked = likes.any((like) => like['user_id'] == _currentUser!.id);
         }
-
-        return PostModel.fromJson(postData).copyWith(
-          likesCount: likesCount,
-          isLikedByCurrentUser: isLiked,
-        );
-      }).toList();
-
-      // Create anonymous user for all posts
-      final anonymousUser = UserModel(
-        id: '',
-        email: '',
-        alias: 'Anonymous',
-        displayName: 'Anonymous',
-        role: 'user',
-        isBanned: false,
-        isVerified: false,
-        followersCount: 0,
-        followingCount: 0,
-        postsCount: 0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
-      for (final post in posts) {
-        post.user = anonymousUser;
+      } else {
+        likesCount = postData['likes_count'] as int? ?? 0;
       }
+
+      return PostModel.fromJson(postData).copyWith(
+        likesCount: likesCount,
+        isLikedByCurrentUser: isLiked,
+      );
+    }).toList();
+
+    final anonymousUser = _buildAnonymousUser();
+    for (final post in posts) {
+      post.user = anonymousUser;
+    }
+
+    return posts;
+  }
+
+  Future<void> _loadPosts({bool showLoading = true}) async {
+    if (_isFetchingPosts) return;
+    _isFetchingPosts = true;
+    try {
+      if (showLoading) {
+        if (mounted) setState(() => _isLoading = true);
+      }
+      final savedOffset =
+          _scrollController.hasClients ? _scrollController.offset : 0.0;
+      final posts = await _fetchAnonPostsPage();
 
       if (mounted) {
         setState(() {
+          _error = null;
           _posts = posts;
           if (showLoading) _isLoading = false;
+          _hasMorePosts = posts.length >= AppConstants.postsPerPage;
+          _oldestPostCursor = posts.isNotEmpty ? posts.last.createdAt : null;
         });
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(savedOffset.clamp(
@@ -179,9 +217,11 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
         }
 
         // Save to cache for next time
-        final cacheData = (response as List).cast<Map<String, dynamic>>().toList();
+        final cacheData = posts.map((p) => p.toJson()).toList();
         _cache.saveAnonFeed(cacheData);
       }
+
+      _prefetchPostImages(posts);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -194,6 +234,62 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
           if (showLoading) _isLoading = false;
         });
       }
+    } finally {
+      _isFetchingPosts = false;
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (_isLoadingMore || !_hasMorePosts) return;
+    if (_oldestPostCursor == null) return;
+    _isLoadingMore = true;
+    if (mounted) setState(() {});
+
+    try {
+      final morePosts = await _fetchAnonPostsPage(
+        before: _oldestPostCursor,
+        limit: AppConstants.postsPerPage,
+      );
+
+      if (morePosts.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMorePosts = false;
+          });
+        }
+        return;
+      }
+
+      final existingIds = _posts.map((p) => p.id).toSet();
+      final newPosts =
+          morePosts.where((p) => !existingIds.contains(p.id)).toList();
+
+      if (newPosts.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMorePosts = false;
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _posts.addAll(newPosts);
+          _oldestPostCursor = _posts.last.createdAt;
+          _hasMorePosts = newPosts.length >= AppConstants.postsPerPage;
+        });
+      }
+
+      _prefetchPostImages(newPosts);
+
+      final cacheData = _posts.map((p) => p.toJson()).toList();
+      _cache.saveAnonFeed(cacheData);
+    } catch (e) {
+      debugPrint('Error loading more anonymous posts: $e');
+    } finally {
+      _isLoadingMore = false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -340,7 +436,7 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed to share: ${e.toString()}'),
+                              content: Text(AppErrorHandler.userMessage(e)),
                               backgroundColor: AppConstants.red,
                               behavior: SnackBarBehavior.floating,
                             ),
@@ -432,7 +528,7 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete post: ${e.toString()}'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -483,15 +579,37 @@ class _AnonymousScreenState extends State<AnonymousScreen> {
                 ),
               )
             : RefreshIndicator(
-                onRefresh: _loadPosts,
+                onRefresh: () => _loadPosts(showLoading: false),
                 color: AppConstants.primaryBlue,
                 backgroundColor: AppConstants.darkGray,
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   controller: _scrollController,
                   padding: EdgeInsets.zero,
-                  itemCount: _posts.length,
+                  itemCount:
+                      _posts.length + (_isLoadingMore || _hasMorePosts ? 1 : 0),
                   itemBuilder: (context, index) {
+                    if (index == _posts.length) {
+                      if (_isLoadingMore) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppConstants.primaryBlue,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      if (!_hasMorePosts) {
+                        return const SizedBox(height: 24);
+                      }
+                      return const SizedBox.shrink();
+                    }
                     return PostCard(
                       post: _posts[index],
                       currentUser: _currentUser,

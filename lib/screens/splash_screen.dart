@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../services/maintenance_service.dart';
 import '../providers/connectivity_provider.dart';
+import '../services/app_startup_service.dart';
+import 'onboarding/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,6 +22,9 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  bool _startupTimedOut = false;
+  bool _navigating = false;
+  Timer? _startupTimer;
 
   @override
   void initState() {
@@ -43,19 +49,47 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Check auth status and navigate
-    Timer(const Duration(seconds: 2), _checkAuthAndNavigate);
+    // Initialize critical services, then navigate quickly.
+    AppStartupService.initializeCritical();
+    _startupTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted || _navigating) return;
+      setState(() => _startupTimedOut = true);
+    });
+    Timer(const Duration(milliseconds: 800), _checkAuthAndNavigate);
   }
 
-  Future<void> _checkAuthAndNavigate() async {
+  Future<void> _checkAuthAndNavigate({bool forceContinue = false}) async {
+    if (_navigating) return;
+    _navigating = true;
+    try {
+      await AppStartupService.initializeCritical()
+          .timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _startupTimedOut = true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _startupTimedOut = true);
+      }
+    }
     final session = supabase.auth.currentSession;
 
     // If there is no session at all, we can't assume a logged-in user.
     if (session == null) {
+      final prefs = await SharedPreferences.getInstance();
+      final hasOnboarded =
+          prefs.getBool(OnboardingScreen.prefKey) ?? false;
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushReplacementNamed(
+        context,
+        hasOnboarded ? '/login' : '/onboarding',
+      );
       return;
     }
+
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, '/home');
 
     // We have a session; decide behavior based on connectivity.
     bool isOnline = true;
@@ -67,49 +101,41 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
 
-    // Offline: keep the user logged in and go straight to home,
-    // without hitting the network or signing them out.
     if (!isOnline) {
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
       return;
     }
 
-    // Online: verify profile as before, but do not log the user out
-    // just because of a transient error.
+    // Online checks run after initial navigation for faster launch.
+    unawaited(_postNavigateChecks(session.user.id));
+  }
+
+  Future<void> _postNavigateChecks(String userId) async {
     try {
+      final currentUser = supabase.auth.currentUser;
+      if (currentUser == null) {
+        return;
+      }
       final shouldBlock =
-          await MaintenanceService().shouldBlockAuthenticated(session.user);
+          await MaintenanceService().shouldBlockAuthenticated(currentUser);
       if (shouldBlock) {
         await AuthService().signOut();
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/maintenance');
-        }
+        navigatorKey.currentState?.pushReplacementNamed('/maintenance');
         return;
       }
 
-      final userProfile = await AuthService().getUserProfile(session.user.id);
-
-      if (!mounted) return;
-
-      if (userProfile != null) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        // If the profile truly doesn't exist while online, fall back to login.
+      final userProfile = await AuthService().getUserProfile(userId);
+      if (userProfile == null) {
         await AuthService().signOut();
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/login');
-        }
+        navigatorKey.currentState?.pushReplacementNamed('/login');
       }
     } catch (_) {
-      // On error but with a valid session, keep the user in the app.
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+      // Ignore post-navigation errors to keep launch fast.
     }
   }
 
   @override
   void dispose() {
+    _startupTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -136,24 +162,12 @@ class _SplashScreenState extends State<SplashScreen>
                           width: 120,
                           height: 120,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: Colors.transparent,
                             borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF007AFF).withOpacity(0.4),
-                                blurRadius: 30,
-                                offset: const Offset(0, 15),
-                              ),
-                            ],
                           ),
-                          child: const Icon(
-                            Icons.shield_outlined,
-                            color: Colors.white,
-                            size: 60,
+                          child: Image.asset(
+                            'assets/images/anon.png',
+                            fit: BoxFit.contain,
                           ),
                         ),
                         const SizedBox(height: 32),
@@ -203,13 +217,36 @@ class _SplashScreenState extends State<SplashScreen>
             bottom: 20,
             left: 0,
             right: 0,
-            child: Text(
-              'Built by The Oracles',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[500],
-                fontSize: 12,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_startupTimedOut)
+                  GestureDetector(
+                    onTap: () => _checkAuthAndNavigate(forceContinue: true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Text(
+                        'Still loading… Tap to continue',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Text(
+                  'Built by The Oracles',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

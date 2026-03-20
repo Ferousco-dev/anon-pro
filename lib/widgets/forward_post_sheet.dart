@@ -5,6 +5,7 @@ import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../models/chat_model.dart';
 import '../utils/constants.dart';
+import '../utils/app_error_handler.dart';
 
 /// Bottom sheet for forwarding a post to a private chat or group chat.
 /// Reuses the existing message insertion logic (messages table).
@@ -161,7 +162,7 @@ class _ForwardPostSheetState extends State<ForwardPostSheet> {
         setState(() => _sendingToChatId = null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to forward: ${e.toString()}'),
+            content: Text(AppErrorHandler.userMessage(e)),
             backgroundColor: AppConstants.red,
             behavior: SnackBarBehavior.floating,
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/constants.dart';
 import '../qa/anonymous_questions_screen.dart';
-import '../qa/qa_answers_inbox_screen.dart';
 import '../confession_rooms/confession_rooms_screen.dart';
 import 'streak_progress_screen.dart';
 import 'notification_settings_screen.dart';
@@ -23,6 +23,9 @@ class ProfileMenuScreen extends StatefulWidget {
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   @override
   Widget build(BuildContext context) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isOwner = currentUserId != null && currentUserId == widget.userId;
+
     return Scaffold(
       backgroundColor: AppConstants.black,
       appBar: AppBar(
@@ -82,24 +85,26 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Streak Section
-              _buildMenuCard(
-                icon: Icons.local_fire_department_rounded,
-                title: 'Streak',
-                description: 'Track your engagement streak',
-                color: Colors.orange,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (ctx) => StreakProgressScreen(
-                        userId: widget.userId,
+              if (isOwner) ...[
+                // Streak Section
+                _buildMenuCard(
+                  icon: Icons.local_fire_department_rounded,
+                  title: 'Streak',
+                  description: 'Track your engagement streak',
+                  color: Colors.orange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (ctx) => StreakProgressScreen(
+                          userId: widget.userId,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               _buildMenuCard(
                 icon: Icons.rocket_launch_rounded,
                 title: 'Growth Center',
@@ -131,25 +136,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Inbox Section
-              _buildMenuCard(
-                icon: Icons.mail_outline_rounded,
-                title: 'Inbox',
-                description: 'View Q&A answers and responses',
-                color: Colors.green,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (ctx) => QAAnswersInboxScreen(
-                        userId: widget.userId,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-
               // Policy Section
               _buildMenuCard(
                 icon: Icons.policy_outlined,
@@ -167,22 +153,23 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
               ),
               const SizedBox(height: 12),
 
-              _buildMenuCard(
-                icon: Icons.notifications_active_rounded,
-                title: 'Notifications',
-                description: 'Manage push notification settings',
-                color: AppConstants.primaryBlue,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (ctx) => NotificationSettingsScreen(
-                        userId: widget.userId,
+              if (isOwner)
+                _buildMenuCard(
+                  icon: Icons.notifications_active_rounded,
+                  title: 'Notifications',
+                  description: 'Manage push notification settings',
+                  color: AppConstants.primaryBlue,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (ctx) => NotificationSettingsScreen(
+                          userId: widget.userId,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
+                    );
+                  },
+                ),
 
               const SizedBox(height: 40),
 

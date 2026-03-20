@@ -60,6 +60,20 @@ function pemToDer(pem: string) {
   return bytes.buffer;
 }
 
+function normalizeAndroidSound(sound: string) {
+  const trimmed = sound.trim();
+  if (!trimmed) return trimmed;
+  const name = trimmed.split("/").pop() ?? trimmed;
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex > 0 ? name.slice(0, dotIndex) : name;
+}
+
+function normalizeIosSound(sound: string) {
+  const trimmed = sound.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.split("/").pop() ?? trimmed;
+}
+
 async function getAccessToken(sa: ServiceAccount) {
   const assertion = await signJwt(sa);
   const res = await fetch(sa.token_uri, {
@@ -85,7 +99,64 @@ async function sendToToken(
   body: string,
   data: Record<string, string>,
   sound: string,
+  dataOnly: boolean,
+  channelId?: string,
+  imageUrl?: string,
 ) {
+  const androidSound = normalizeAndroidSound(sound);
+  const iosSound = normalizeIosSound(sound);
+  const trimmedChannelId = channelId?.trim();
+  const trimmedImage = imageUrl?.trim();
+  const androidNotification: Record<string, unknown> = {};
+  if (androidSound) {
+    androidNotification.sound = androidSound;
+  }
+  if (trimmedChannelId) {
+    androidNotification.channel_id = trimmedChannelId;
+  }
+  if (trimmedImage) {
+    androidNotification.image = trimmedImage;
+  }
+
+  const apnsPayload: Record<string, unknown> = {
+    aps: iosSound ? { sound: iosSound } : {},
+  };
+  const apns: Record<string, unknown> = {
+    payload: apnsPayload,
+  };
+  if (trimmedImage) {
+    apns.fcm_options = { image: trimmedImage };
+  }
+
+  const message: Record<string, unknown> = {
+    token,
+    data,
+    android: dataOnly
+      ? { priority: "HIGH" }
+      : { notification: androidNotification },
+    apns: dataOnly ? { headers: { "apns-priority": "10" } } : apns,
+    webpush: dataOnly
+      ? { headers: { Urgency: "high" } }
+      : {
+          notification: {
+            title,
+            body,
+            icon: "/icons/Icon-192.png",
+            badge: "/icons/Icon-192.png",
+            sound,
+            ...(trimmedImage ? { image: trimmedImage } : {}),
+          },
+        },
+  };
+
+  if (!dataOnly) {
+    message.notification = {
+      title,
+      body,
+      ...(trimmedImage ? { image: trimmedImage } : {}),
+    };
+  }
+
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
     {
@@ -96,28 +167,95 @@ async function sendToToken(
       },
       body: JSON.stringify({
         message: {
-          token,
-          notification: { title, body },
-          data,
-          android: {
-            notification: { sound },
+          ...message,
+        },
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+}
+
+async function sendToTopic(
+  projectId: string,
+  accessToken: string,
+  topic: string,
+  title: string,
+  body: string,
+  data: Record<string, string>,
+  sound: string,
+  dataOnly: boolean,
+  channelId?: string,
+  imageUrl?: string,
+) {
+  const androidSound = normalizeAndroidSound(sound);
+  const iosSound = normalizeIosSound(sound);
+  const trimmedChannelId = channelId?.trim();
+  const trimmedImage = imageUrl?.trim();
+  const androidNotification: Record<string, unknown> = {};
+  if (androidSound) {
+    androidNotification.sound = androidSound;
+  }
+  if (trimmedChannelId) {
+    androidNotification.channel_id = trimmedChannelId;
+  }
+  if (trimmedImage) {
+    androidNotification.image = trimmedImage;
+  }
+
+  const apnsPayload: Record<string, unknown> = {
+    aps: iosSound ? { sound: iosSound } : {},
+  };
+  const apns: Record<string, unknown> = {
+    payload: apnsPayload,
+  };
+  if (trimmedImage) {
+    apns.fcm_options = { image: trimmedImage };
+  }
+
+  const message: Record<string, unknown> = {
+    topic,
+    data,
+    android: dataOnly
+      ? { priority: "HIGH" }
+      : { notification: androidNotification },
+    apns: dataOnly ? { headers: { "apns-priority": "10" } } : apns,
+    webpush: dataOnly
+      ? { headers: { Urgency: "high" } }
+      : {
+          notification: {
+            title,
+            body,
+            icon: "/icons/Icon-192.png",
+            badge: "/icons/Icon-192.png",
+            sound,
+            ...(trimmedImage ? { image: trimmedImage } : {}),
           },
-          apns: {
-            payload: {
-              aps: {
-                sound,
-              },
-            },
-          },
-          webpush: {
-            notification: {
-              title,
-              body,
-              icon: "/icons/Icon-192.png",
-              badge: "/icons/Icon-192.png",
-              sound,
-            },
-          },
+        },
+  };
+
+  if (!dataOnly) {
+    message.notification = {
+      title,
+      body,
+      ...(trimmedImage ? { image: trimmedImage } : {}),
+    };
+  }
+
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          ...message,
         },
       }),
     },
@@ -141,14 +279,27 @@ serve(async (req) => {
     const {
       token,
       tokens,
+      topic,
       title,
       body,
       data = {},
       sound = "default",
+      data_only = false,
+      channel_id,
+      image,
     } = payload;
 
-    if (!title || !body) {
+    if (!data_only && (!title || !body)) {
       return new Response("Missing title/body", { status: 400 });
+    }
+
+    const normalizedData: Record<string, string> = {};
+    if (data && typeof data === "object") {
+      for (const [key, value] of Object.entries(data)) {
+        if (value === null || value === undefined) continue;
+        normalizedData[key] =
+          typeof value === "string" ? value : String(value);
+      }
     }
 
     const accessToken = await getAccessToken(sa);
@@ -158,12 +309,51 @@ serve(async (req) => {
         ? [token]
         : [];
 
+    const channelId =
+      typeof channel_id === "string" && channel_id.trim().length > 0
+        ? channel_id.trim()
+        : undefined;
+    const imageUrl =
+      typeof image === "string" && image.trim().length > 0
+        ? image.trim()
+        : undefined;
+
+    if (topic && typeof topic === "string" && topic.trim().length > 0) {
+      await sendToTopic(
+        sa.project_id,
+        accessToken,
+        topic.trim(),
+        title,
+        body,
+        normalizedData,
+        sound,
+        data_only === true,
+        channelId,
+        imageUrl,
+      );
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     if (list.length === 0) {
-      return new Response("No token(s) provided", { status: 400 });
+      return new Response("No token(s) or topic provided", { status: 400 });
     }
 
     for (const t of list) {
-      await sendToToken(sa.project_id, accessToken, t, title, body, data, sound);
+      await sendToToken(
+        sa.project_id,
+        accessToken,
+        t,
+        title,
+        body,
+        normalizedData,
+        sound,
+        data_only === true,
+        channelId,
+        imageUrl,
+      );
     }
 
     return new Response(JSON.stringify({ ok: true }), {

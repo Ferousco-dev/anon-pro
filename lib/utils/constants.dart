@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:anonpro/utils/app_config.dart';
 
 class AppConstants {
   // App Info
@@ -51,8 +52,8 @@ class AppConstants {
   static const int maxBioLength = 160;
 
   // ImageKit Configuration
-  static const String imagekitUrlEndpoint = 'https://ik.imagekit.io/bchbwqir6';
-  static const String imagekitPublicKey = 'public_CdhxhG0EaHMaE5SkujBFCRzgRbA=';
+  static String get imagekitUrlEndpoint => AppConfig.imagekitUrlEndpoint;
+  static String get imagekitPublicKey => AppConfig.imagekitPublicKey;
 
   // Image Upload Limits
   static const int maxImageSizeMB = 10;
